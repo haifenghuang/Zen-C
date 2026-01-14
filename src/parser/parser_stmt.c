@@ -56,7 +56,7 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async)
         gen_param = token_strdup(gt);
         if (lexer_next(l).type != TOK_RANGLE)
         {
-            zpanic("Expected >");
+            zpanic_at(lexer_peek(l), "Expected >");
         }
     }
 
@@ -193,9 +193,10 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
     lexer_next(l); // eat 'match'
     ASTNode *expr = parse_expression(ctx, l);
 
-    if (lexer_next(l).type != TOK_LBRACE)
+    Token t_brace = lexer_next(l);
+    if (t_brace.type != TOK_LBRACE)
     {
-        zpanic("Expected { in match");
+        zpanic_at(t_brace, "Expected { in match");
     }
 
     ASTNode *h = 0, *tl = 0;
@@ -272,12 +273,12 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
             Token b = lexer_next(l);
             if (b.type != TOK_IDENT)
             {
-                zpanic("Expected variable name in pattern");
+                zpanic_at(b, "Expected variable name in pattern");
             }
             binding = token_strdup(b);
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected )");
+                zpanic_at(lexer_peek(l), "Expected )");
             }
             is_destructure = 1;
         }
@@ -293,7 +294,7 @@ ASTNode *parse_match(ParserContext *ctx, Lexer *l)
 
         if (lexer_next(l).type != TOK_ARROW)
         {
-            zpanic("Expected =>");
+            zpanic_at(lexer_peek(l), "Expected =>");
         }
 
         ASTNode *body;
@@ -386,7 +387,7 @@ ASTNode *parse_guard(ParserContext *ctx, Lexer *l)
     Token t = lexer_peek(l);
     if (t.type != TOK_IDENT || strncmp(t.start, "else", 4) != 0)
     {
-        zpanic("Expected 'else' after guard condition");
+        zpanic_at(t, "Expected 'else' after guard condition");
     }
     lexer_next(l); // consume 'else'
 
@@ -445,7 +446,7 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
     // Expect {
     if (lexer_peek(l).type != TOK_LBRACE)
     {
-        zpanic("Expected { after asm");
+        zpanic_at(lexer_peek(l), "Expected { after asm");
     }
     lexer_next(l);
 
@@ -564,7 +565,7 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
         }
         else
         {
-            zpanic("Expected assembly string, instruction, or ':' in asm block");
+            zpanic_at(t, "Expected assembly string, instruction, or ':' in asm block");
         }
     }
 
@@ -601,19 +602,19 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
 
                 if (lexer_peek(l).type != TOK_LPAREN)
                 {
-                    zpanic("Expected ( after output mode");
+                    zpanic_at(lexer_peek(l), "Expected ( after output mode");
                 }
                 lexer_next(l);
 
                 Token var = lexer_next(l);
                 if (var.type != TOK_IDENT)
                 {
-                    zpanic("Expected variable name");
+                    zpanic_at(var, "Expected variable name");
                 }
 
                 if (lexer_peek(l).type != TOK_RPAREN)
                 {
-                    zpanic("Expected ) after variable");
+                    zpanic_at(lexer_peek(l), "Expected ) after variable");
                 }
                 lexer_next(l);
 
@@ -658,19 +659,19 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
 
                 if (lexer_peek(l).type != TOK_LPAREN)
                 {
-                    zpanic("Expected ( after in");
+                    zpanic_at(lexer_peek(l), "Expected ( after in");
                 }
                 lexer_next(l);
 
                 Token var = lexer_next(l);
                 if (var.type != TOK_IDENT)
                 {
-                    zpanic("Expected variable name");
+                    zpanic_at(var, "Expected variable name");
                 }
 
                 if (lexer_peek(l).type != TOK_RPAREN)
                 {
-                    zpanic("Expected ) after variable");
+                    zpanic_at(lexer_peek(l), "Expected ) after variable");
                 }
                 lexer_next(l);
 
@@ -726,7 +727,7 @@ ASTNode *parse_asm(ParserContext *ctx, Lexer *l)
     // Expect closing }
     if (lexer_peek(l).type != TOK_RBRACE)
     {
-        zpanic("Expected } at end of asm block");
+        zpanic_at(lexer_peek(l), "Expected } at end of asm block");
     }
     lexer_next(l);
 
@@ -751,7 +752,7 @@ ASTNode *parse_test(ParserContext *ctx, Lexer *l)
     Token t = lexer_next(l);
     if (t.type != TOK_STRING)
     {
-        zpanic("Test name must be a string literal");
+        zpanic_at(t, "Test name must be a string literal");
     }
 
     // Strip quotes for AST storage
@@ -784,7 +785,7 @@ ASTNode *parse_assert(ParserContext *ctx, Lexer *l)
         Token st = lexer_next(l);
         if (st.type != TOK_STRING)
         {
-            zpanic("Expected message string");
+            zpanic_at(st, "Expected message string");
         }
         msg = xmalloc(st.len + 1);
         strncpy(msg, st.start, st.len);
@@ -895,12 +896,12 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             }
             if (next.type != TOK_COMMA)
             {
-                zpanic("Expected comma");
+                zpanic_at(next, "Expected comma");
             }
         }
         if (lexer_next(l).type != TOK_OP)
         {
-            zpanic("Expected =");
+            zpanic_at(lexer_peek(l), "Expected =");
         }
         ASTNode *init = parse_expression(ctx, l);
         if (lexer_peek(l).type == TOK_SEMICOLON)
@@ -960,13 +961,13 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             }
             if (next.type != TOK_COMMA)
             {
-                zpanic("Expected comma in struct pattern");
+                zpanic_at(next, "Expected comma in struct pattern");
             }
         }
 
         if (lexer_next(l).type != TOK_OP)
         {
-            zpanic("Expected =");
+            zpanic_at(lexer_peek(l), "Expected =");
         }
         ASTNode *init = parse_expression(ctx, l);
         if (lexer_peek(l).type == TOK_SEMICOLON)
@@ -993,12 +994,12 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
 
         if (lexer_next(l).type != TOK_RPAREN)
         {
-            zpanic("Expected ')' in guard pattern");
+            zpanic_at(lexer_peek(l), "Expected ')' in guard pattern");
         }
 
         if (lexer_next(l).type != TOK_OP)
         {
-            zpanic("Expected '=' after guard pattern");
+            zpanic_at(lexer_peek(l), "Expected '=' after guard pattern");
         }
 
         ASTNode *init = parse_expression(ctx, l);
@@ -1006,7 +1007,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
         Token t = lexer_next(l);
         if (t.type != TOK_IDENT || strncmp(t.start, "else", 4) != 0)
         {
-            zpanic("Expected 'else' in guard statement");
+            zpanic_at(t, "Expected 'else' in guard statement");
         }
 
         ASTNode *else_blk;
@@ -1141,7 +1142,7 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
             }
             else if (init->type == NODE_EXPR_SLICE)
             {
-                zpanic("Slice Node has NO Type Info!");
+                zpanic_at(init->token, "Slice Node has NO Type Info!");
             }
             // Fallbacks for literals
             else if (init->type == NODE_EXPR_LITERAL)
@@ -1963,7 +1964,7 @@ ASTNode *parse_macro_call(ParserContext *ctx, Lexer *l, char *macro_name)
     // Expect {
     if (lexer_peek(l).type != TOK_LBRACE)
     {
-        zpanic("Expected { after macro invocation");
+        zpanic_at(lexer_peek(l), "Expected { after macro invocation");
     }
     lexer_next(l); // consume {
 
@@ -1979,7 +1980,7 @@ ASTNode *parse_macro_call(ParserContext *ctx, Lexer *l, char *macro_name)
         Token t = lexer_peek(l);
         if (t.type == TOK_EOF)
         {
-            zpanic("Unexpected EOF in macro block");
+            zpanic_at(t, "Unexpected EOF in macro block");
         }
 
         if (t.type == TOK_LBRACE)
@@ -2025,7 +2026,7 @@ ASTNode *parse_macro_call(ParserContext *ctx, Lexer *l, char *macro_name)
         char err[256];
         snprintf(err, sizeof(err), "Unknown plugin: %s (did you forget 'import plugin \"%s\"'?)",
                  macro_name, macro_name);
-        zpanic(err);
+        zpanic_at(start_tok, err);
     }
 
     // Find Plugin Definition
@@ -2036,14 +2037,14 @@ ASTNode *parse_macro_call(ParserContext *ctx, Lexer *l, char *macro_name)
     {
         char err[256];
         snprintf(err, sizeof(err), "Plugin implementation not found: %s", plugin_name);
-        zpanic(err);
+        zpanic_at(start_tok, err);
     }
 
     // Execute Plugin Immediately (Expansion)
     FILE *capture = tmpfile();
     if (!capture)
     {
-        zpanic("Failed to create capture buffer for plugin expansion");
+        zpanic_at(start_tok, "Failed to create capture buffer for plugin expansion");
     }
 
     ZApi api = {.filename = g_current_filename ? g_current_filename : "input.zc",
@@ -2166,7 +2167,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
         lexer_next(l);
         if (lexer_peek(l).type != TOK_IDENT || strncmp(lexer_peek(l).start, "var", 3) != 0)
         {
-            zpanic("Expected 'var' after autofree");
+            zpanic_at(lexer_peek(l), "Expected 'var' after autofree");
         }
         s = parse_var_decl(ctx, l);
         s->var_decl.is_autofree = 1;
@@ -2260,7 +2261,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             lexer_next(l); // eat raw
             if (lexer_peek(l).type != TOK_LBRACE)
             {
-                zpanic("Expected { after raw");
+                zpanic_at(lexer_peek(l), "Expected { after raw");
             }
             lexer_next(l); // eat {
 
@@ -2271,7 +2272,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
                 Token t = lexer_next(l);
                 if (t.type == TOK_EOF)
                 {
-                    zpanic("Unexpected EOF in raw block");
+                    zpanic_at(t, "Unexpected EOF in raw block");
                 }
                 if (t.type == TOK_LBRACE)
                 {
@@ -2518,7 +2519,7 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
             Token t = lexer_next(l);
             if (t.type != TOK_STRING && t.type != TOK_FSTRING)
             {
-                zpanic("Expected string literal after print/eprint");
+                zpanic_at(t, "Expected string literal after print/eprint");
             }
 
             char *inner = xmalloc(t.len);
@@ -2751,7 +2752,7 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
     Token n = lexer_next(l);
     if (n.type != TOK_IDENT)
     {
-        zpanic("Expected trait name");
+        zpanic_at(n, "Expected trait name");
     }
     char *name = xmalloc(n.len + 1);
     strncpy(name, n.start, n.len);
@@ -2778,7 +2779,7 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
         Token ft = lexer_next(l);
         if (ft.type != TOK_IDENT || strncmp(ft.start, "fn", 2) != 0)
         {
-            zpanic("Expected fn in trait");
+            zpanic_at(ft, "Expected fn in trait");
         }
 
         Token mn = lexer_next(l);
@@ -2825,7 +2826,7 @@ ASTNode *parse_trait(ParserContext *ctx, Lexer *l)
         else
         {
             // Default implementation? Not supported yet.
-            zpanic("Trait methods must end with ; for now");
+            zpanic_at(lexer_peek(l), "Trait methods must end with ; for now");
         }
     }
 
@@ -2852,7 +2853,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
         gen_param = token_strdup(gt);
         if (lexer_next(l).type != TOK_RANGLE)
         {
-            zpanic("Expected >");
+            zpanic_at(lexer_peek(l), "Expected >");
         }
     }
 
@@ -2954,7 +2955,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                 }
                 else
                 {
-                    zpanic("Expected 'fn' after 'async'");
+                    zpanic_at(lexer_peek(l), "Expected 'fn' after 'async'");
                 }
             }
             else
@@ -2990,7 +2991,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
             // GENERIC IMPL TEMPLATE: impl Box<T>
             if (lexer_next(l).type != TOK_LBRACE)
             {
-                zpanic("Expected {");
+                zpanic_at(lexer_peek(l), "Expected {");
             }
             ASTNode *h = 0, *tl = 0;
             while (1)
@@ -3051,7 +3052,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     }
                     else
                     {
-                        zpanic("Expected 'fn' after 'async'");
+                        zpanic_at(lexer_peek(l), "Expected 'fn' after 'async'");
                     }
                 }
                 else
@@ -3138,7 +3139,7 @@ ASTNode *parse_impl(ParserContext *ctx, Lexer *l)
                     }
                     else
                     {
-                        zpanic("Expected 'fn' after 'async'");
+                        zpanic_at(lexer_peek(l), "Expected 'fn' after 'async'");
                     }
                 }
                 else
@@ -3284,7 +3285,7 @@ ASTNode *parse_struct(ParserContext *ctx, Lexer *l, int is_union)
                 Token width_tok = lexer_next(l);
                 if (width_tok.type != TOK_INT)
                 {
-                    zpanic("Expected bit width integer");
+                    zpanic_at(width_tok, "Expected bit width integer");
                 }
                 f->field.bit_width = atoi(token_strdup(width_tok));
             }
@@ -3422,7 +3423,7 @@ ASTNode *parse_enum(ParserContext *ctx, Lexer *l)
                 payload = parse_type_obj(ctx, l);
                 if (lexer_next(l).type != TOK_RPAREN)
                 {
-                    zpanic("Expected )");
+                    zpanic_at(lexer_peek(l), "Expected )");
                 }
             }
 
@@ -3541,7 +3542,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
         Token plugin_tok = lexer_next(l);
         if (plugin_tok.type != TOK_STRING)
         {
-            zpanic("Expected string literal after 'import plugin'");
+            zpanic_at(plugin_tok, "Expected string literal after 'import plugin'");
         }
 
         // Extract plugin name (strip quotes)
@@ -3559,7 +3560,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
             Token alias_tok = lexer_next(l);
             if (alias_tok.type != TOK_IDENT)
             {
-                zpanic("Expected identifier after 'as'");
+                zpanic_at(alias_tok, "Expected identifier after 'as'");
             }
             alias = token_strdup(alias_tok);
         }
@@ -3600,7 +3601,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
             Token sym_tok = lexer_next(l);
             if (sym_tok.type != TOK_IDENT)
             {
-                zpanic("Expected identifier in selective import");
+                zpanic_at(sym_tok, "Expected identifier in selective import");
             }
 
             symbols[symbol_count] = xmalloc(sym_tok.len + 1);
@@ -3615,7 +3616,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
                 Token alias_tok = lexer_next(l);
                 if (alias_tok.type != TOK_IDENT)
                 {
-                    zpanic("Expected identifier after 'as'");
+                    zpanic_at(alias_tok, "Expected identifier after 'as'");
                 }
 
                 aliases[symbol_count] = xmalloc(alias_tok.len + 1);
@@ -3637,7 +3638,8 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
         if (from_tok.type != TOK_IDENT || from_tok.len != 4 ||
             strncmp(from_tok.start, "from", 4) != 0)
         {
-            zpanic("Expected 'from' after selective import list, got type=%d", from_tok.type);
+            zpanic_at(from_tok, "Expected 'from' after selective import list, got type=%d",
+                      from_tok.type);
         }
     }
 
@@ -3645,9 +3647,10 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
     Token t = lexer_next(l);
     if (t.type != TOK_STRING)
     {
-        zpanic("Expected string (filename) after 'from' in selective import, got "
-               "type %d",
-               t.type);
+        zpanic_at(t,
+                  "Expected string (filename) after 'from' in selective import, got "
+                  "type %d",
+                  t.type);
     }
     int ln = t.len - 2; // Remove quotes
     char *fn = xmalloc(ln + 1);
@@ -3737,7 +3740,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
             Token alias_tok = lexer_next(l);
             if (alias_tok.type != TOK_IDENT)
             {
-                zpanic("Expected identifier after 'as'");
+                zpanic_at(alias_tok, "Expected identifier after 'as'");
             }
 
             alias = xmalloc(alias_tok.len + 1);
@@ -3767,19 +3770,6 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
     // C Header: Emit include and return (don't parse)
     if (strlen(fn) > 2 && strcmp(fn + strlen(fn) - 2, ".h") == 0)
     {
-        // We can iterate over registered modules to check if we missed setting
-        // is_c_header? But we handled 'as' above. If no 'as', we need to check if
-        // we should register it? Usually 'import "foo.h" as f' is required for
-        // namespacing.
-
-        // Emit #include
-        // TODO: Where to emit? parser doesn't emit code usually.
-        // Actually, we can just return a NODE_INCLUDE AST!
-        // But wait, the user wants 'import as alias'.
-
-        // If we return NULL, nothing happens.
-        // Use NODE_INCLUDE to ensure it gets emitted.
-
         ASTNode *n = ast_create(NODE_INCLUDE);
         n->include.path = xstrdup(fn); // Store exact path
         n->include.is_system = 0;      // Double quotes
@@ -3790,7 +3780,7 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
     char *src = load_file(fn);
     if (!src)
     {
-        zpanic("Not found: %s", fn);
+        zpanic_at(t, "Not found: %s", fn);
     }
 
     Lexer i;
@@ -3869,7 +3859,7 @@ char *run_comptime_block(ParserContext *ctx, Lexer *l)
         Token t = lexer_next(l);
         if (t.type == TOK_EOF)
         {
-            zpanic("Unexpected EOF in comptime block");
+            zpanic_at(t, "Unexpected EOF in comptime block");
         }
         if (t.type == TOK_LBRACE)
         {
@@ -3909,7 +3899,7 @@ char *run_comptime_block(ParserContext *ctx, Lexer *l)
     FILE *f = fopen(filename, "w");
     if (!f)
     {
-        zpanic("Could not create temp file %s", filename);
+        zpanic_at(lexer_peek(l), "Could not create temp file %s", filename);
     }
 
     emit_preamble(ctx, f);
@@ -3992,7 +3982,7 @@ char *run_comptime_block(ParserContext *ctx, Lexer *l)
     int res = system(cmd);
     if (res != 0)
     {
-        zpanic("Comptime compilation failed for:\n%s", code);
+        zpanic_at(lexer_peek(l), "Comptime compilation failed for:\n%s", code);
     }
 
     char out_file[1024];
@@ -4000,7 +3990,7 @@ char *run_comptime_block(ParserContext *ctx, Lexer *l)
     sprintf(cmd, "./%s > %s", bin, out_file);
     if (system(cmd) != 0)
     {
-        zpanic("Comptime execution failed");
+        zpanic_at(lexer_peek(l), "Comptime execution failed");
     }
 
     char *output_src = load_file(out_file);
@@ -4037,7 +4027,7 @@ ASTNode *parse_plugin(ParserContext *ctx, Lexer *l)
     Token tk = lexer_next(l);
     if (tk.type != TOK_IDENT)
     {
-        zpanic("Expected plugin name after 'plugin' keyword");
+        zpanic_at(tk, "Expected plugin name after 'plugin' keyword");
     }
 
     // Extract plugin name
@@ -4055,7 +4045,7 @@ ASTNode *parse_plugin(ParserContext *ctx, Lexer *l)
         Token t = lexer_peek(l);
         if (t.type == TOK_EOF)
         {
-            zpanic("Unexpected EOF in plugin block, expected 'end'");
+            zpanic_at(t, "Unexpected EOF in plugin block, expected 'end'");
         }
 
         // Check for 'end'

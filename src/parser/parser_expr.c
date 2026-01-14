@@ -648,7 +648,7 @@ ASTNode *parse_lambda(ParserContext *ctx, Lexer *l)
 
     if (lexer_peek(l).type != TOK_LPAREN)
     {
-        zpanic("Expected '(' after 'fn' in lambda");
+        zpanic_at(lexer_peek(l), "Expected '(' after 'fn' in lambda");
     }
 
     lexer_next(l);
@@ -663,7 +663,7 @@ ASTNode *parse_lambda(ParserContext *ctx, Lexer *l)
         {
             if (lexer_peek(l).type != TOK_COMMA)
             {
-                zpanic("Expected ',' between parameters");
+                zpanic_at(lexer_peek(l), "Expected ',' between parameters");
             }
 
             lexer_next(l);
@@ -672,14 +672,14 @@ ASTNode *parse_lambda(ParserContext *ctx, Lexer *l)
         Token name_tok = lexer_next(l);
         if (name_tok.type != TOK_IDENT)
         {
-            zpanic("Expected parameter name");
+            zpanic_at(name_tok, "Expected parameter name");
         }
 
         param_names[num_params] = token_strdup(name_tok);
 
         if (lexer_peek(l).type != TOK_COLON)
         {
-            zpanic("Expected ':' after parameter name");
+            zpanic_at(lexer_peek(l), "Expected ':' after parameter name");
         }
 
         lexer_next(l);
@@ -704,7 +704,7 @@ ASTNode *parse_lambda(ParserContext *ctx, Lexer *l)
     }
     else
     {
-        zpanic("Expected '{' for lambda body");
+        zpanic_at(lexer_peek(l), "Expected '{' for lambda body");
     }
 
     ASTNode *lambda = ast_create(NODE_LAMBDA);
@@ -966,7 +966,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
     {
         if (lexer_peek(l).type != TOK_LPAREN)
         {
-            zpanic("Expected ( after sizeof");
+            zpanic_at(lexer_peek(l), "Expected ( after sizeof");
         }
         lexer_next(l);
 
@@ -992,7 +992,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             ASTNode *ex = parse_expression(ctx, l);
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected ) after sizeof identifier");
+                zpanic_at(lexer_peek(l), "Expected ) after sizeof identifier");
             }
             node = ast_create(NODE_EXPR_SIZEOF);
             node->size_of.target_type = NULL;
@@ -1005,7 +1005,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
     {
         if (lexer_peek(l).type != TOK_LPAREN)
         {
-            zpanic("Expected ( after typeof");
+            zpanic_at(lexer_peek(l), "Expected ( after typeof");
         }
         lexer_next(l);
 
@@ -1030,7 +1030,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             ASTNode *ex = parse_expression(ctx, l);
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected ) after typeof expression");
+                zpanic_at(lexer_peek(l), "Expected ) after typeof expression");
             }
             node = ast_create(NODE_TYPEOF);
             node->size_of.target_type = NULL;
@@ -1043,7 +1043,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         Token ident = lexer_next(l);
         if (ident.type != TOK_IDENT)
         {
-            zpanic("Expected intrinsic name after @");
+            zpanic_at(ident, "Expected intrinsic name after @");
         }
 
         int kind = -1;
@@ -1057,19 +1057,25 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         }
         else
         {
-            zpanic("Unknown intrinsic @%.*s", ident.len, ident.start);
+            zpanic_at(ident, "Unknown intrinsic @%.*s", ident.len, ident.start);
         }
 
-        if (lexer_next(l).type != TOK_LPAREN)
         {
-            zpanic("Expected ( after intrinsic");
+            Token t = lexer_next(l);
+            if (t.type != TOK_LPAREN)
+            {
+                zpanic_at(t, "Expected ( after intrinsic");
+            }
         }
 
         Type *target = parse_type_formal(ctx, l);
 
-        if (lexer_next(l).type != TOK_RPAREN)
         {
-            zpanic("Expected ) after intrinsic type");
+            Token t = lexer_next(l);
+            if (t.type != TOK_RPAREN)
+            {
+                zpanic_at(t, "Expected ) after intrinsic type");
+            }
         }
 
         node = ast_create(NODE_REFLECTION);
@@ -1082,9 +1088,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
     {
         ASTNode *expr = parse_expression(ctx, l);
         skip_comments(l);
-        if (lexer_next(l).type != TOK_LBRACE)
         {
-            zpanic("Expected { after match expression");
+            Token t = lexer_next(l);
+            if (t.type != TOK_LBRACE)
+            {
+                zpanic_at(t, "Expected { after match expression");
+            }
         }
 
         ASTNode *h = 0, *tl = 0;
@@ -1119,12 +1128,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 Token b = lexer_next(l);
                 if (b.type != TOK_IDENT)
                 {
-                    zpanic("Expected binding name");
+                    zpanic_at(b, "Expected binding name");
                 }
                 binding = token_strdup(b);
                 if (lexer_next(l).type != TOK_RPAREN)
                 {
-                    zpanic("Expected )");
+                    zpanic_at(lexer_peek(l), "Expected )");
                 }
                 is_destructure = 1;
             }
@@ -1140,7 +1149,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             skip_comments(l);
             if (lexer_next(l).type != TOK_ARROW)
             {
-                zpanic("Expected '=>'");
+                zpanic_at(lexer_peek(l), "Expected '=>'");
             }
 
             ASTNode *body;
@@ -1224,7 +1233,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 Token suffix = lexer_next(l);
                 if (suffix.type != TOK_IDENT)
                 {
-                    zpanic("Expected identifier after ::");
+                    zpanic_at(suffix, "Expected identifier after ::");
                 }
 
                 SelectiveImport *si =
@@ -1302,7 +1311,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
                     if (is_struct)
                     {
-                        instantiate_generic(ctx, acc, concrete_type);
+                        instantiate_generic(ctx, acc, concrete_type, t);
 
                         char *clean_type = sanitize_mangled_name(concrete_type);
 
@@ -1323,7 +1332,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                         }
                         else
                         {
-                            zpanic("Unknown generic %s", acc);
+                            zpanic_at(t, "Unknown generic %s", acc);
                         }
                     }
                     changed = 1;
@@ -1394,7 +1403,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     Token fn = lexer_next(l);
                     if (lexer_next(l).type != TOK_COLON)
                     {
-                        zpanic("Expected :");
+                        zpanic_at(lexer_peek(l), "Expected :");
                     }
                     ASTNode *val = parse_expression(ctx, l);
                     ASTNode *assign = ast_create(NODE_VAR_DECL);
@@ -1447,7 +1456,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected )");
+                zpanic_at(lexer_peek(l), "Expected )");
             }
 
             if (ac == 0)
@@ -1593,7 +1602,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected )");
+                zpanic_at(lexer_peek(l), "Expected )");
             }
             for (int i = args_provided; i < sig->total_args; i++)
             {
@@ -1696,7 +1705,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected )");
+                zpanic_at(lexer_peek(l), "Expected )");
             }
 
             node = ast_create(NODE_EXPR_CALL);
@@ -1825,9 +1834,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
                     Type *cast_type_obj = parse_type_formal(ctx, l);
                     char *cast_type = type_to_string(cast_type_obj);
-                    if (lexer_next(l).type != TOK_RPAREN)
                     {
-                        zpanic("Expected ) after cast");
+                        Token t = lexer_next(l);
+                        if (t.type != TOK_RPAREN)
+                        {
+                            zpanic_at(t, "Expected ) after cast");
+                        }
                     }
                     ASTNode *target = parse_expr_prec(ctx, l, PREC_UNARY);
 
@@ -1844,7 +1856,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         ASTNode *expr = parse_expression(ctx, l);
         if (lexer_next(l).type != TOK_RPAREN)
         {
-            zpanic("Expected )");
+            zpanic_at(lexer_peek(l), "Expected )");
         }
         node = expr;
     }
@@ -1878,7 +1890,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         }
         if (lexer_next(l).type != TOK_RBRACKET)
         {
-            zpanic("Expected ] after array literal");
+            zpanic_at(lexer_peek(l), "Expected ] after array literal");
         }
         node = ast_create(NODE_EXPR_ARRAY_LITERAL);
         node->array_literal.elements = head;
@@ -1952,9 +1964,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     }
                 }
             }
-            if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected ) after call arguments");
+                Token t = lexer_next(l);
+                if (t.type != TOK_RPAREN)
+                {
+                    zpanic_at(t, "Expected ) after call arguments");
+                }
             }
 
             ASTNode *call = ast_create(NODE_EXPR_CALL);
@@ -1980,9 +1995,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         {
             Token bracket = lexer_next(l); // consume '['
             ASTNode *index = parse_expression(ctx, l);
-            if (lexer_next(l).type != TOK_RBRACKET)
             {
-                zpanic("Expected ] after index");
+                Token t = lexer_next(l);
+                if (t.type != TOK_RBRACKET)
+                {
+                    zpanic_at(t, "Expected ] after index");
+                }
             }
 
             // Static Array Bounds Check
@@ -2268,7 +2286,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 }
                 if (lexer_next(l).type != TOK_RPAREN)
                 {
-                    zpanic("Expected )");
+                    zpanic_at(lexer_peek(l), "Expected )");
                 }
 
                 char fmt[256];
@@ -2581,7 +2599,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
                 Token tk = lexer_peek(l);
                 if (tk.type == TOK_EOF)
                 {
-                    zpanic("Unterminated sizeof");
+                    zpanic_at(tk, "Unterminated sizeof");
                 }
                 if (tk.type == TOK_LPAREN)
                 {
@@ -2607,7 +2625,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
         }
         else
         {
-            zpanic("sizeof must be followed by (");
+            zpanic_at(lexer_peek(l), "sizeof must be followed by (");
         }
     }
     else
@@ -2843,7 +2861,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
             }
             if (lexer_next(l).type != TOK_RPAREN)
             {
-                zpanic("Expected )");
+                zpanic_at(lexer_peek(l), "Expected )");
             }
             call->call.args = head;
             call->call.arg_names = has_named ? arg_names : NULL;
@@ -2893,7 +2911,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
 
             if (lexer_next(l).type != TOK_RBRACKET)
             {
-                zpanic("Expected ]");
+                zpanic_at(lexer_peek(l), "Expected ]");
             }
 
             if (is_slice)

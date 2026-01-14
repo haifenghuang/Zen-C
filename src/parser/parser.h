@@ -312,7 +312,7 @@ void add_to_impl_list(ParserContext *ctx, ASTNode *node);
 void add_to_global_list(ParserContext *ctx, ASTNode *node);
 void register_builtins(ParserContext *ctx);
 void add_instantiated_func(ParserContext *ctx, ASTNode *fn);
-void instantiate_generic(ParserContext *ctx, const char *name, const char *concrete_type);
+void instantiate_generic(ParserContext *ctx, const char *name, const char *concrete_type, Token t);
 char *sanitize_mangled_name(const char *s);
 void register_impl(ParserContext *ctx, const char *trait, const char *strct);
 int check_impl(ParserContext *ctx, const char *trait, const char *strct);

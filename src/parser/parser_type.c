@@ -399,7 +399,7 @@ Type *parse_type_base(ParserContext *ctx, Lexer *l)
             }
 
             char *arg_str = type_to_string(arg);
-            instantiate_generic(ctx, name, arg_str);
+            instantiate_generic(ctx, name, arg_str, t);
 
             char *clean_arg = sanitize_mangled_name(arg_str);
             char mangled[256];
@@ -455,7 +455,7 @@ Type *parse_type_base(ParserContext *ctx, Lexer *l)
             }
             if (lexer_next(l).type != TOK_RBRACKET)
             {
-                zpanic("Expected ] after array size");
+                zpanic_at(lexer_peek(l), "Expected ] after array size");
             }
 
             Type *arr = type_new(TYPE_ARRAY);
@@ -467,7 +467,7 @@ Type *parse_type_base(ParserContext *ctx, Lexer *l)
         // Otherwise it's a slice [T]
         if (lexer_next(l).type != TOK_RBRACKET)
         {
-            zpanic("Expected ] in type");
+            zpanic_at(lexer_peek(l), "Expected ] in type");
         }
 
         // Register Slice
@@ -505,7 +505,7 @@ Type *parse_type_base(ParserContext *ctx, Lexer *l)
         }
         if (lexer_next(l).type != TOK_RPAREN)
         {
-            zpanic("Expected ) in tuple");
+            zpanic_at(lexer_peek(l), "Expected ) in tuple");
         }
 
         register_tuple(ctx, sig);
@@ -773,7 +773,7 @@ char *parse_embed(ParserContext *ctx, Lexer *l)
     Token t = lexer_next(l);
     if (t.type != TOK_STRING)
     {
-        zpanic("String required");
+        zpanic_at(t, "String required");
     }
     char fn[256];
     strncpy(fn, t.start + 1, t.len - 2);
@@ -782,7 +782,7 @@ char *parse_embed(ParserContext *ctx, Lexer *l)
     FILE *f = fopen(fn, "rb");
     if (!f)
     {
-        zpanic("404: %s", fn);
+        zpanic_at(t, "404: %s", fn);
     }
     fseek(f, 0, SEEK_END);
     long len = ftell(f);

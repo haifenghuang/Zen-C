@@ -1761,7 +1761,7 @@ ASTNode *copy_fields_replacing(ParserContext *ctx, ASTNode *fields, const char *
 
                 if (found)
                 {
-                    instantiate_generic(ctx, template_name, concrete_arg);
+                    instantiate_generic(ctx, template_name, concrete_arg, fields->token);
                 }
             }
             free(type_copy);
@@ -1819,7 +1819,7 @@ void instantiate_methods(ParserContext *ctx, GenericImplTemplate *it,
                     if (strcmp(gt->name, template_name) == 0)
                     {
                         // Found matching template, instantiate it
-                        instantiate_generic(ctx, template_name, arg);
+                        instantiate_generic(ctx, template_name, arg, meth->token);
                         break;
                     }
                     gt = gt->next;
@@ -1833,7 +1833,7 @@ void instantiate_methods(ParserContext *ctx, GenericImplTemplate *it,
     add_instantiated_func(ctx, new_impl);
 }
 
-void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg)
+void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg, Token token)
 {
     // Ignore generic placeholders
     if (strlen(arg) == 1 && isupper(arg[0]))
@@ -1871,7 +1871,7 @@ void instantiate_generic(ParserContext *ctx, const char *tpl, const char *arg)
     }
     if (!t)
     {
-        zpanic("Unknown generic: %s", tpl);
+        zpanic_at(token, "Unknown generic: %s", tpl);
     }
 
     Instantiation *ni = xmalloc(sizeof(Instantiation));
@@ -1981,7 +1981,7 @@ char *parse_condition_raw(ParserContext *ctx, Lexer *l)
             t = lexer_next(l);
             if (t.type == TOK_EOF)
             {
-                zpanic("Unterminated condition");
+                zpanic_at(t, "Unterminated condition");
             }
             if (t.type == TOK_LPAREN)
             {
@@ -2014,7 +2014,7 @@ char *parse_condition_raw(ParserContext *ctx, Lexer *l)
         int len = (l->src + l->pos) - start;
         if (len == 0)
         {
-            zpanic("Empty condition or missing body");
+            zpanic_at(lexer_peek(l), "Empty condition or missing body");
         }
         char *c = xmalloc(len + 1);
         strncpy(c, start, len);
@@ -2340,9 +2340,10 @@ char *consume_and_rewrite(ParserContext *ctx, Lexer *l)
 char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out, int *count_out,
                              Type ***types_out, char ***names_out, int *is_varargs_out)
 {
-    if (lexer_next(l).type != TOK_LPAREN)
+    Token t = lexer_next(l);
+    if (t.type != TOK_LPAREN)
     {
-        zpanic("Expected '(' in function args");
+        zpanic_at(t, "Expected '(' in function args");
     }
 
     char *buf = xmalloc(1024);
@@ -2421,13 +2422,13 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
             {
                 if (t.type != TOK_IDENT)
                 {
-                    zpanic("Expected arg name");
+                    zpanic_at(lexer_peek(l), "Expected arg name");
                 }
                 char *name = token_strdup(t);
                 names[count] = name; // Store name
                 if (lexer_next(l).type != TOK_COLON)
                 {
-                    zpanic("Expected ':'");
+                    zpanic_at(lexer_peek(l), "Expected ':'");
                 }
 
                 Type *arg_type = parse_type_formal(ctx, l);
@@ -2500,7 +2501,7 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
     }
     if (lexer_next(l).type != TOK_RPAREN)
     {
-        zpanic("Expected ')' after args");
+        zpanic_at(lexer_peek(l), "Expected ')' after args");
     }
 
     *defaults_out = defaults;
