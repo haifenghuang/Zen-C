@@ -433,35 +433,42 @@ Automatically free the variable when scope exits.
 autofree var types = malloc(1024);
 ```
 
-#### Move Semantics & Copy Safety
-Zen C prevents double-free errors by enforcing **Move Semantics** for non-trivial types (structs) by default.
+#### Resource Semantics (Move by Default)
+Zen C treats types with destructors (like `File`, `Vec`, or malloc'd pointers) as **Resources**. To prevent double-free errors, resources cannot be implicitly duplicated.
 
-- **Move by Default**: Assigning a struct variable transfers ownership. The original variable becomes invalid.
-- **Management Strategies**:
-    - **`Copy` Trait**: Opt-out of move semantics for simple types.
-    - **`ref` Binding**: Use `match val { Some(ref x) => ... }` to inspect without moving.
-    - **Smart Derives**: `@derive(Eq)` uses references for comparison to avoid moves.
+- **Move by Default**: Assigning a resource variable transfers ownership. The original variable becomes invalid (Moved).
+- **Copy Types**: Simple Plain Old Data (int, Point, etc.) can opt-in to `Copy` behavior, making assignment a duplication.
+
+**Diagnostics & Philosophy**:
+If you see an error "Use of moved value", the compiler is telling you: *"This type owns a resource (like memory or a handle) and blindly copying it is unsafe."*
+
+> **Contrast:** Unlike C/C++, Zen C does not implicitly duplicate resource-owning values.
+
+**Function Arguments**:
+Passing a value to a function follows the same rules as assignment: resources are moved unless passed by reference.
 
 ```zc
-struct Mover { val: int; }
-
-fn main() {
-    var a = Mover { val: 1 };
-    var b = a; // 'a' moved to 'b'
-    // print(a.val); // Error: Use of moved value 'a'
-}
+fn process(r: Resource) { ... } // 'r' is moved into function
+fn peek(r: Resource*) { ... }   // 'r' is borrowed (reference)
 ```
 
-**Opt-in Copy**:
+**Explicit Cloning**:
+If you *do* want two copies of a resource, make it explicit:
+
+```zc
+var b = a.clone(); // Deep copy: New allocation, safe.
+```
+
+**Opt-in Copy (Value Types)**:
+For small types without destructors:
 
 ```zc
 struct Point { x: int; y: int; }
-impl Copy for Point {}
+impl Copy for Point {} // Opt-in to implicit duplication
 
 fn main() {
     var p1 = Point { x: 1, y: 2 };
-    var p2 = p1; // p1 copied to p2
-    // p1 is still valid
+    var p2 = p1; // Copied. p1 stays valid.
 }
 ```
 
@@ -569,7 +576,23 @@ impl Drop for Resource {
 }
 ```
 
-> **Note:** If a variable is moved, `drop` is NOT called on the original variable. It adheres to [Move Semantics](#move-semantics--copy-safety).
+> **Note:** If a variable is moved, `drop` is NOT called on the original variable. It adheres to [Resource Semantics](#resource-semantics-move-by-default).
+
+**Copy**
+
+Marker trait to opt-in to `Copy` behavior (implicit duplication) instead of Move semantics. Used via `@derive(Copy)`.
+
+> **Rule:** Types that implement `Copy` must not define a destructor (`Drop`).
+
+```zc
+@derive(Copy)
+struct Point { x: int; y: int; }
+
+fn main() {
+    var p1 = Point{x: 1, y: 2};
+    var p2 = p1; // Copied! p1 remains valid.
+}
+```
 
 #### Composition
 Use `use` to embed other structs. You can either mix them in (flatten fields) or name them (nest fields).

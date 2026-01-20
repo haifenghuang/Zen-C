@@ -69,9 +69,113 @@ static Symbol *tc_lookup(TypeChecker *tc, const char *name)
     return NULL;
 }
 
+// ** Move Semantics Helpers **
+
+static int is_safe_to_copy(TypeChecker *tc, Type *t)
+{
+    // Use parser's helper if available, or simple heuristic
+    return is_type_copy(tc->pctx, t);
+}
+
+static void check_use_validity(TypeChecker *tc, ASTNode *var_node, Symbol *sym)
+{
+    if (!sym || !var_node)
+    {
+        return;
+    }
+
+    if (sym->is_moved)
+    {
+        char msg[256];
+        snprintf(
+            msg, 255,
+            "Use of moved value '%s'. This type owns resources and cannot be implicitly copied.",
+            sym->name);
+        tc_error(tc, var_node->token, msg);
+    }
+}
+
+static void mark_symbol_moved(TypeChecker *tc, Symbol *sym, ASTNode *context_node)
+{
+    if (!sym)
+    {
+        return;
+    }
+
+    // Only move if type is NOT Copy
+    Type *t = sym->type_info;
+    if (t && !is_safe_to_copy(tc, t))
+    {
+        sym->is_moved = 1;
+    }
+}
+
+static void mark_symbol_valid(TypeChecker *tc, Symbol *sym)
+{
+    if (sym)
+    {
+        sym->is_moved = 0;
+    }
+}
+
 // ** Node Checkers **
 
 static void check_node(TypeChecker *tc, ASTNode *node);
+
+static void check_expr_binary(TypeChecker *tc, ASTNode *node)
+{
+    check_node(tc, node->binary.left);
+    check_node(tc, node->binary.right);
+
+    // Assignment Logic for Moves
+    if (strcmp(node->binary.op, "=") == 0)
+    {
+        // If RHS is a var, it might Move
+        if (node->binary.right->type == NODE_EXPR_VAR)
+        {
+            Symbol *rhs_sym = tc_lookup(tc, node->binary.right->var_ref.name);
+            if (rhs_sym)
+            {
+                mark_symbol_moved(tc, rhs_sym, node);
+            }
+        }
+
+        // LHS is being (re-)initialized, so it becomes Valid.
+        if (node->binary.left->type == NODE_EXPR_VAR)
+        {
+            Symbol *lhs_sym = tc_lookup(tc, node->binary.left->var_ref.name);
+            if (lhs_sym)
+            {
+                mark_symbol_valid(tc, lhs_sym);
+            }
+        }
+    }
+}
+
+static void check_expr_call(TypeChecker *tc, ASTNode *node)
+{
+    check_node(tc, node->call.callee);
+
+    // Check arguments
+    ASTNode *arg = node->call.args;
+    while (arg)
+    {
+        check_node(tc, arg);
+
+        // If argument is passed by VALUE, and it's a variable, it MOVES.
+        // If passed by ref (UNARY '&'), the child was checked but Is Not A Var Node itself.
+        if (arg->type == NODE_EXPR_VAR)
+        {
+            Symbol *sym = tc_lookup(tc, arg->var_ref.name);
+            if (sym)
+            {
+                mark_symbol_moved(tc, sym, node);
+            }
+        }
+
+        arg = arg->next;
+    }
+}
 
 static void check_block(TypeChecker *tc, ASTNode *block)
 {
@@ -140,6 +244,16 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node)
         {
             check_type_compatibility(tc, decl_type, init_type, node->token);
         }
+
+        // Move Analysis: If initializing from another variable, it moves.
+        if (node->var_decl.init_expr->type == NODE_EXPR_VAR)
+        {
+            Symbol *init_sym = tc_lookup(tc, node->var_decl.init_expr->var_ref.name);
+            if (init_sym)
+            {
+                mark_symbol_moved(tc, init_sym, node);
+            }
+        }
     }
 
     // If type is not explicit, we should ideally infer it from init_expr.
@@ -187,6 +301,9 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
     {
         node->type_info = sym->type_info;
     }
+
+    // Check for Use-After-Move
+    check_use_validity(tc, node, sym);
 }
 
 static void check_node(TypeChecker *tc, ASTNode *node)
@@ -240,15 +357,26 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         tc_exit_scope(tc);
         break;
     case NODE_EXPR_BINARY:
-        check_node(tc, node->binary.left);
-        check_node(tc, node->binary.right);
+        check_expr_binary(tc, node);
         break;
     case NODE_EXPR_CALL:
-        check_node(tc, node->call.callee);
-        check_node(tc, node->call.args);
+        check_expr_call(tc, node);
         break;
     default:
-        // Generic recursion for lists.
+        // Generic recursion for lists and other nodes.
+        // Special case for Return to trigger move?
+        if (node->type == NODE_RETURN && node->ret.value)
+        {
+            // If returning a variable by value, it is moved.
+            if (node->ret.value->type == NODE_EXPR_VAR)
+            {
+                Symbol *sym = tc_lookup(tc, node->ret.value->var_ref.name);
+                if (sym)
+                {
+                    mark_symbol_moved(tc, sym, node);
+                }
+            }
+        }
         break;
     }
 

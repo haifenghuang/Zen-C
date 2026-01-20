@@ -853,6 +853,13 @@ void emit_impl_vtables(ParserContext *ctx, FILE *out)
             emitted[count].strct = strct;
             count++;
 
+            if (0 == strcmp(trait, "Copy"))
+            {
+                // Marker trait, no runtime vtable needed
+                ref = ref->next;
+                continue;
+            }
+
             fprintf(out, "%s_VTable %s_%s_VTable = {", trait, strct, trait);
 
             ASTNode *m = node->impl_trait.methods;

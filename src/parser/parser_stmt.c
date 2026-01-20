@@ -4269,30 +4269,37 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
     strncpy(fn, t.start + 1, ln);
     fn[ln] = 0;
 
-    // Resolve relative paths (if starts with ./ or ../
+    // Resolve paths relative to current file
     char resolved_path[1024];
-    if (fn[0] == '.' && (fn[1] == '/' || (fn[1] == '.' && fn[2] == '/')))
+    int is_explicit_relative = (fn[0] == '.' && (fn[1] == '/' || (fn[1] == '.' && fn[2] == '/')));
+
+    // Try to resolve relative to current file if not absolute
+    if (fn[0] != '/')
     {
-        // Relative import - resolve relative to current file
         char *current_dir = xstrdup(g_current_filename);
         char *last_slash = strrchr(current_dir, '/');
         if (last_slash)
         {
             *last_slash = 0; // Truncate to directory
+
+            // Handle explicit relative differently?
+            // Existing logic enforced it. Let's try to verify existence first.
+
+            // Construct candidate path
             const char *leaf = fn;
-            if (leaf[0] == '.' && leaf[1] == '/')
-            {
-                leaf += 2;
-            }
+            // Clean up ./ prefix for cleaner path construction if we want
+            // but keeping it is fine too, /path/to/./file works.
+
             snprintf(resolved_path, sizeof(resolved_path), "%s/%s", current_dir, leaf);
-        }
-        else
-        {
-            snprintf(resolved_path, sizeof(resolved_path), "%s", fn);
+
+            // If it's an explicit relative path, OR if the file exists at this relative location
+            if (is_explicit_relative || access(resolved_path, R_OK) == 0)
+            {
+                free(fn);
+                fn = xstrdup(resolved_path);
+            }
         }
         free(current_dir);
-        free(fn);
-        fn = xstrdup(resolved_path);
     }
 
     // Check if file exists, if not try system-wide paths

@@ -622,6 +622,12 @@ static ASTNode *generate_derive_impls(ParserContext *ctx, ASTNode *strct, char *
             sprintf(code, "impl %s { fn to_string(self) -> char* { return \"%s { ... }\"; } }",
                     name, name);
         }
+        else if (0 == strcmp(trait, "Copy"))
+        {
+            // Marker trait for Copy/Move semantics
+            code = xmalloc(1024);
+            sprintf(code, "impl Copy for %s {}", name);
+        }
 
         if (code)
         {
