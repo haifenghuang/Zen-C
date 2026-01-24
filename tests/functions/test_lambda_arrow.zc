@@ -18,3 +18,11 @@ test "test_lambda_arrow" {
     "compute((a, b) -> a * b, 3, 4) = {res3}";
     if res3 != 12 { exit(1); }
 }
+
+test "lambda_inference_repro" {
+    var dble = x -> x * 2.0;
+    var res = dble(9.0);
+    if res != 18.0 {
+        exit(1);
+    }
+}
