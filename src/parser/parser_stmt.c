@@ -1282,6 +1282,10 @@ ASTNode *parse_for(ParserContext *ctx, Lexer *l)
         {
             init = parse_var_decl(ctx, l);
         }
+        else if (lexer_peek(l).type == TOK_IDENT && strncmp(lexer_peek(l).start, "var", 3) == 0)
+        {
+            zpanic_at(lexer_peek(l), "'var' is deprecated. Use 'let' instead.");
+        }
         else
         {
             init = parse_expression(ctx, l);
@@ -2066,6 +2070,11 @@ ASTNode *parse_statement(ParserContext *ctx, Lexer *l)
         if (strncmp(tk.start, "let", 3) == 0 && tk.len == 3)
         {
             return parse_var_decl(ctx, l);
+        }
+
+        if (strncmp(tk.start, "var", 3) == 0 && tk.len == 3)
+        {
+            zpanic_at(tk, "'var' is deprecated. Use 'let' instead.");
         }
 
         // Static local variable: static let x = 0;
