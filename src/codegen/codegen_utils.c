@@ -411,6 +411,10 @@ char *infer_type(ParserContext *ctx, ASTNode *node)
             char *inner = infer_type(ctx, node->unary.operand);
             if (inner)
             {
+                if (strcmp(inner, "string") == 0)
+                {
+                    return xstrdup("char");
+                }
                 char *ptr = strchr(inner, '*');
                 if (ptr)
                 {
