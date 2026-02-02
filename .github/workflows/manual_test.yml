@@ -6,10 +6,10 @@ on:
       os:
         description: 'Operating System'
         required: true
-        default: 'ubuntu-latest'
+        default: 'self-hosted'
         type: choice
         options:
-          - ubuntu-latest
+          - self-hosted
           - macos-latest
           - macos-13
           - windows-latest
