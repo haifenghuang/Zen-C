@@ -111,7 +111,7 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async)
     if (strcmp(name, "main") == 0)
     {
         ret = "int";
-        ret_type_obj = type_new(TYPE_INT);
+        ret_type_obj = type_new(TYPE_C_INT);
     }
 
     if (lexer_peek(l).type == TOK_ARROW)
