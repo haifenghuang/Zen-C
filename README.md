@@ -1523,8 +1523,14 @@ make test
 *   **Standard Library**: `std/` - Written in Zen C itself.
 
 ---
-
-## Attributions
+ 
+ ## Security
+ 
+ For security reporting instructions, please see [SECURITY.md](SECURITY.md).
+ 
+ ---
+ 
+ ## Attributions
 
 This project uses third-party libraries. Full license texts can be found in the `LICENSES/` directory.
 

@@ -1523,6 +1523,12 @@ make test
 
 ---
 
+## 安全
+
+關於安全漏洞報告的說明，請參閱 [SECURITY_ZH_TW.md](SECURITY_ZH_TW.md)。
+
+---
+
 ## 致謝與歸属
 
 本項目使用了第三方庫。完整許可證文本可在 `LICENSES/` 目錄中找到。

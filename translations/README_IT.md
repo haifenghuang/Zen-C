@@ -1518,6 +1518,12 @@ make test
 
 ---
 
+## Sicurezza
+
+Per istruzioni sulla segnalazione di vulnerabilità, vedi [SECURITY_IT.md](SECURITY_IT.md).
+
+---
+
 ## Attribuzioni
 
 Questo progetto utilizza librerie esterne. I testi di licenza completi possono essere trovati nella directory `LICENSES/`.

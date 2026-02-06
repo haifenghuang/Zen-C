@@ -1521,6 +1521,12 @@ make test
 
 ---
 
+## Segurança
+
+Para instruções sobre relatórios de segurança, por favor veja [SECURITY_PT_BR.md](SECURITY_PT_BR.md).
+
+---
+
 ## Atribuições
 
 Este projeto usa bibliotecas de terceiros. Textos completos de licença podem ser encontrados no diretório `LICENSES/`.

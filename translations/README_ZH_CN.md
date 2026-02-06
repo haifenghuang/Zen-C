@@ -1523,6 +1523,12 @@ make test
 
 ---
 
+## 安全
+
+关于安全漏洞报告的说明，请参阅 [SECURITY_ZH_CN.md](SECURITY_ZH_CN.md)。
+
+---
+
 ## 致谢与归属
 
 本项目使用了第三方库。完整许可证文本可在 `LICENSES/` 目录中找到。

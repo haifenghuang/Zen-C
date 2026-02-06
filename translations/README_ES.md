@@ -1523,6 +1523,12 @@ make test
 
 ---
 
+## Seguridad
+
+Para instrucciones sobre reportes de seguridad, por favor vea [SECURITY_ES.md](SECURITY_ES.md).
+
+---
+
 ## Atribuciones
 
 Este proyecto utiliza bibliotecas de terceros. Los textos completos de las licencias pueden encontrarse en el directorio `LICENSES/`.
