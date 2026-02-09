@@ -1,6 +1,7 @@
 
 #include "parser.h"
 #include <ctype.h>
+#include "analysis/const_fold.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -868,36 +869,6 @@ ASTNode *parse_def(ParserContext *ctx, Lexer *l)
     {
         lexer_next(l);
 
-        // Check for constant integer literal
-        if (lexer_peek(l).type == TOK_INT)
-        {
-            Token val_tok = lexer_peek(l);
-            int val = (int)strtol(token_strdup(val_tok), NULL, 0); // support hex/octal
-
-            ZenSymbol *s = find_symbol_entry(ctx, ns);
-            if (s)
-            {
-                s->is_const_value = 1;
-                s->const_int_val = val;
-                s->is_def = 1; // Double ensure
-
-                if (!s->type_name || strcmp(s->type_name, "unknown") == 0)
-                {
-                    if (s->type_name)
-                    {
-                        free(s->type_name);
-                    }
-                    s->type_name = xstrdup("int");
-                    if (s->type_info)
-                    {
-                        free(s->type_info);
-                    }
-                    s->type_info = type_new(TYPE_INT);
-                    s->type_info->is_const = 1;
-                }
-            }
-        }
-
         if (lexer_peek(l).type == TOK_LPAREN && type_str && strncmp(type_str, "Tuple_", 6) == 0)
         {
             char *code = parse_tuple_literal(ctx, l, type_str);
@@ -907,8 +878,32 @@ ASTNode *parse_def(ParserContext *ctx, Lexer *l)
         else
         {
             i = parse_expression(ctx, l);
+            
+            // Try to evaluate constant expression for symbol table
+            long long val;
+            if (eval_const_int_expr(i, ctx, &val))
+            {
+                 ZenSymbol *s = find_symbol_entry(ctx, ns);
+                 if (s)
+                 {
+                     s->is_const_value = 1;
+                     s->const_int_val = (int)val;
+                     s->is_def = 1;
+                     
+                     // Auto-infer type for def if unknown
+                     if (!s->type_name || strcmp(s->type_name, "unknown") == 0)
+                     {
+                        if (s->type_name) free(s->type_name);
+                        s->type_name = xstrdup("int");
+                        if (s->type_info) free(s->type_info);
+                        s->type_info = type_new(TYPE_INT);
+                        s->type_info->is_const = 1;
+                     }
+                 }
+            }
         }
     }
+
     else
     {
         zpanic_at(n, "'def' constants must be initialized");

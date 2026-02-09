@@ -2,8 +2,131 @@
 #include "../codegen/codegen.h"
 #include "../plugins/plugin_manager.h"
 #include "parser.h"
-#include <ctype.h>
-#include <stdio.h>
+#include "analysis/const_fold.h"
+
+void try_parse_macro_const(ParserContext *ctx, const char *content)
+{
+    Lexer l;
+    lexer_init(&l, content);
+    l.emit_comments = 0;
+
+    Token t = lexer_next(&l);
+
+    // Manual skip of #
+    const char *p = content;
+    while (isspace(*p))
+    {
+        p++;
+    }
+    if (*p == '#')
+    {
+        p++;
+    }
+
+    // Now lex the rest
+    lexer_init(&l, p);
+
+    // Expect 'define'
+    Token def = lexer_next(&l);
+    if (def.type != TOK_IDENT || strncmp(def.start, "define", 6) != 0)
+    {
+        return;
+    }
+
+    // Expect NAME
+    Token name = lexer_next(&l);
+    if (name.type != TOK_IDENT)
+    {
+        return;
+    }
+
+    const char *after_name = name.start + name.len;
+    if (*after_name == '(')
+    {
+        return; // Function-like macro definition
+    }
+
+    // Check remaining tokens for SAFETY
+    Lexer check_l = l;
+    int balance = 0;
+    while (1)
+    {
+        Token ct = lexer_next(&check_l);
+        if (ct.type == TOK_EOF)
+        {
+            break;
+        }
+        if (ct.type == TOK_LPAREN)
+        {
+            balance++;
+        }
+        else if (ct.type == TOK_RPAREN)
+        {
+            balance--;
+        }
+        else if (ct.type == TOK_LBRACE || ct.type == TOK_RBRACE || ct.type == TOK_SEMICOLON)
+        {
+            return; // Unsafe or complex
+        }
+
+        // Safety check for C casts/pointers that cause compiler crash in expression parser
+        if (ct.type == TOK_IDENT)
+        {
+            if (is_token(ct, "void") || is_token(ct, "char") || is_token(ct, "short") ||
+                is_token(ct, "int") || is_token(ct, "long") || is_token(ct, "float") ||
+                is_token(ct, "double") || is_token(ct, "signed") || is_token(ct, "unsigned") ||
+                is_token(ct, "struct") || is_token(ct, "union") || is_token(ct, "enum") ||
+                is_token(ct, "const") || is_token(ct, "volatile") || is_token(ct, "extern") ||
+                is_token(ct, "static") || is_token(ct, "register") || is_token(ct, "auto") ||
+                is_token(ct, "typedef"))
+            {
+                return;
+            }
+        }
+    }
+    if (balance != 0)
+    {
+        return; // Unbalanced
+    }
+
+    // Try parse expression
+    // We need to handle potential parsing errors gracefully.
+    // If parse_expression errors, zpanic unwinds.
+    // But we filtered hopefully unsafe tokens.
+
+    ASTNode *expr = parse_expression(ctx, &l);
+    if (!expr)
+    {
+        return;
+    }
+
+    long long val;
+    if (eval_const_int_expr(expr, ctx, &val))
+    {
+        // Success! Register as constant.
+        char *n = token_strdup(name);
+
+        // Check if already defined?
+        ZenSymbol *existing = find_symbol_entry(ctx, n);
+        if (!existing)
+        {
+            // Add to symbol table
+            add_symbol(ctx, n, "int", type_new(TYPE_INT)); // Placeholder type
+            // find_symbol_entry to set properties
+            ZenSymbol *sym = find_symbol_entry(ctx, n);
+            if (sym)
+            {
+                sym->is_const_value = 1;
+                sym->const_int_val = (int)val;
+                sym->is_def = 1;
+            }
+        }
+        else
+        {
+            free(n);
+        }
+    }
+}
 #include <stdlib.h>
 #include <string.h>
 

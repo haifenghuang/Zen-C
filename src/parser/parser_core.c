@@ -1,9 +1,7 @@
 
 #include "parser.h"
 #include "zprep.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "analysis/const_fold.h"
 
 static ASTNode *generate_derive_impls(ParserContext *ctx, ASTNode *strct, char **traits, int count);
 
@@ -337,6 +335,9 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
             content[t.len + 1] = 0;
             s = ast_create(NODE_RAW_STMT);
             s->raw_stmt.content = content;
+
+            // Attempt to parse simple integer/constant macros
+            try_parse_macro_const(ctx, content);
         }
         else if (t.type == TOK_DEF)
         {

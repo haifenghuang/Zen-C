@@ -2987,6 +2987,61 @@ ASTNode *parse_include(ParserContext *ctx, Lexer *l)
     ASTNode *n = ast_create(NODE_INCLUDE);
     n->include.path = path;
     n->include.is_system = is_system;
+
+    if (!is_system && path)
+    {
+        char *src = load_file(path);
+        if (src)
+        {
+            char *ptr = src;
+            while (*ptr)
+            {
+                char *line_start = ptr;
+                char *line_end = ptr;
+                while (*line_end)
+                {
+                    if (*line_end == '\n')
+                    {
+                        // Check for line continuation (simplistic)
+                        if (line_end > line_start && *(line_end - 1) == '\\')
+                        {
+                            line_end++;
+                            continue;
+                        }
+                        break;
+                    }
+                    line_end++;
+                }
+
+                int len = line_end - line_start;
+                if (len > 0)
+                {
+                    char *line_buf = xmalloc(len + 1);
+                    strncpy(line_buf, line_start, len);
+                    line_buf[len] = 0;
+
+                    char *p = line_buf;
+                    while (*p && isspace(*p))
+                    {
+                        p++;
+                    }
+                    if (*p == '#')
+                    {
+                        try_parse_macro_const(ctx, line_buf);
+                    }
+                    free(line_buf);
+                }
+
+                ptr = line_end;
+                if (*ptr == '\n')
+                {
+                    ptr++;
+                }
+            }
+            free(src);
+        }
+    }
+
     return n;
 }
 ASTNode *parse_import(ParserContext *ctx, Lexer *l)

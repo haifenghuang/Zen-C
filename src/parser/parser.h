@@ -607,6 +607,17 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
                              char ***names_out, int *is_varargs_out, char ***ctype_overrides_out);
 
 /**
+ * @brief Scan build directives.
+ */
+void scan_build_directives(struct ParserContext *ctx, const char *src);
+
+/**
+ * @brief Attempt to parse a #define macro as a constant integer.
+ * Used for simple macros in headers to allow array sizes etc.
+ */
+void try_parse_macro_const(struct ParserContext *ctx, const char *content);
+
+/**
  * @brief Checks if a file has been imported.
  */
 int is_file_imported(ParserContext *ctx, const char *path);
