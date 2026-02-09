@@ -3226,13 +3226,17 @@ ASTNode *parse_import(ParserContext *ctx, Lexer *l)
     if (access(fn, R_OK) != 0)
     {
         // Try system-wide standard library location
-        static const char *system_paths[] = {"/usr/local/share/zenc", "/usr/share/zenc", NULL};
+        const char *system_paths[] = {getenv("ZC_ROOT"), "/usr/local/share/zenc",
+                                      "/usr/share/zenc"};
+        size_t system_paths_count = sizeof(system_paths) / sizeof(*system_paths);
 
         char system_path[1024];
         int found = 0;
 
-        for (int i = 0; system_paths[i] && !found; i++)
+        for (size_t i = 0; i < system_paths_count && !found; i++)
         {
+            if (!system_paths[i])
+                continue;
             snprintf(system_path, sizeof(system_path), "%s/%s", system_paths[i], fn);
             if (access(system_path, R_OK) == 0)
             {
