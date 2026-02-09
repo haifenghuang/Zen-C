@@ -2302,7 +2302,8 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             {
                 // Empty struct init often conflicts with block start (e.g. if x == y {})
                 // We allow it only if we verify 'acc' is a struct name.
-                if (find_struct_def(ctx, acc))
+                if (find_struct_def(ctx, acc) || is_known_generic(ctx, acc) ||
+                    is_primitive_type_name(acc))
                 {
                     is_struct_init = 1;
                 }
@@ -2359,6 +2360,73 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
             if (is_struct_init)
             {
+                // Special case for primitive types (e.g. i32{})
+                if (is_primitive_type_name(acc))
+                {
+                    lexer_next(l); // Eat {
+                    if (lexer_peek(l).type == TOK_RBRACE)
+                    {
+                        lexer_next(l); // Eat }
+                        // Return 0 for empty primitive init
+                        node = ast_create(NODE_EXPR_LITERAL);
+                        node->literal.type_kind = LITERAL_INT;
+                        node->literal.int_val = 0;
+                        // Determine type kind from name
+                        TypeKind tk = TYPE_INT;
+                        if (strcmp(acc, "i8") == 0)
+                        {
+                            tk = TYPE_I8;
+                        }
+                        else if (strcmp(acc, "u8") == 0)
+                        {
+                            tk = TYPE_U8;
+                        }
+                        else if (strcmp(acc, "i16") == 0)
+                        {
+                            tk = TYPE_I16;
+                        }
+                        else if (strcmp(acc, "u16") == 0)
+                        {
+                            tk = TYPE_U16;
+                        }
+                        else if (strcmp(acc, "i32") == 0)
+                        {
+                            tk = TYPE_I32;
+                        }
+                        else if (strcmp(acc, "u32") == 0)
+                        {
+                            tk = TYPE_U32;
+                        }
+                        else if (strcmp(acc, "i64") == 0)
+                        {
+                            tk = TYPE_I64;
+                        }
+                        else if (strcmp(acc, "u64") == 0)
+                        {
+                            tk = TYPE_U64;
+                        }
+                        else if (strcmp(acc, "f32") == 0)
+                        {
+                            tk = TYPE_F32;
+                            node->literal.type_kind = LITERAL_FLOAT;
+                            node->literal.float_val = 0.0;
+                        }
+                        else if (strcmp(acc, "f64") == 0)
+                        {
+                            tk = TYPE_F64;
+                            node->literal.type_kind = LITERAL_FLOAT;
+                            node->literal.float_val = 0.0;
+                        }
+
+                        node->type_info = type_new(tk);
+                        return node;
+                    }
+                    // TODO: Handle non-empty primitive init { val } code if needed
+                    // For now, fall through (which will likely error as struct init) or we can
+                    // implement it. Given the immediate failure is generic defaults new<T>(), empty
+                    // is priority.
+                }
+
                 char *struct_name = acc;
                 if (!ctx->current_module_prefix)
                 {
@@ -2696,30 +2764,6 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                         }
                     }
 
-                    // Move Semantics Logic (Added for known funcs)
-                    check_move_usage(ctx, arg, arg ? arg->token : t1);
-                    if (arg && arg->type == NODE_EXPR_VAR)
-                    {
-                        Type *t = find_symbol_type_info(ctx, arg->var_ref.name);
-                        if (!t)
-                        {
-                            ZenSymbol *s = find_symbol_entry(ctx, arg->var_ref.name);
-                            if (s)
-                            {
-                                t = s->type_info;
-                            }
-                        }
-
-                        if (!is_type_copy(ctx, t))
-                        {
-                            ZenSymbol *s = find_symbol_entry(ctx, arg->var_ref.name);
-                            if (s)
-                            {
-                                s->is_moved = 1;
-                            }
-                        }
-                    }
-
                     if (!head)
                     {
                         head = arg;
@@ -2759,8 +2803,6 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     Lexer def_l;
                     lexer_init(&def_l, sig->defaults[i]);
                     ASTNode *def = parse_expression(ctx, &def_l);
-
-                    // Implicit trait cast logic for default values
                     Type *expected = sig->arg_types[i];
                     if (expected && expected->name && is_trait(expected->name))
                     {
@@ -2954,30 +2996,6 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     }
 
                     ASTNode *arg = parse_expression(ctx, l);
-
-                    // Move Semantics Logic (Added)
-                    check_move_usage(ctx, arg, arg ? arg->token : t1);
-                    if (arg && arg->type == NODE_EXPR_VAR)
-                    {
-                        Type *t = find_symbol_type_info(ctx, arg->var_ref.name);
-                        if (!t)
-                        {
-                            ZenSymbol *s = find_symbol_entry(ctx, arg->var_ref.name);
-                            if (s)
-                            {
-                                t = s->type_info;
-                            }
-                        }
-
-                        if (!is_type_copy(ctx, t))
-                        {
-                            ZenSymbol *s = find_symbol_entry(ctx, arg->var_ref.name);
-                            if (s)
-                            {
-                                s->is_moved = 1;
-                            }
-                        }
-                    }
 
                     if (!head)
                     {

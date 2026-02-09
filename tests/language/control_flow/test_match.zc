@@ -6,6 +6,7 @@ fn classify_number(n: int) -> int {
         2 => { return 300; },
         _ => { return -1; }
     }
+    return -1;
 }
 
 fn get_sign(n: int) -> string {
@@ -18,6 +19,7 @@ fn get_sign(n: int) -> string {
             return "negative";
         }
     }
+    return "";
 }
 
 fn classify_extended(n: int) -> int {
@@ -29,6 +31,7 @@ fn classify_extended(n: int) -> int {
         10..=15 => { return 400; },      // Range inclusive (10-15)
         _ => { return -1; }
     }
+    return -1;
 }
 
 test "test_match" {

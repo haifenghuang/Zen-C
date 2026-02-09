@@ -1,7 +1,26 @@
-
 include <cuda_runtime.h>
 import "./string.zc"
 import "./mem.zc"
+
+// CUDA API Externs
+extern fn cudaMalloc(ptr: void**, size: usize) -> int;
+extern fn cudaFree(ptr: void*) -> int;
+extern fn cudaMemcpy(dst: void*, src: void*, count: usize, kind: int) -> int;
+extern fn cudaMemset(ptr: void*, value: int, count: usize) -> int;
+extern fn cudaDeviceSynchronize() -> int;
+extern fn cudaGetDeviceCount(count: int*) -> int;
+extern fn cudaGetDeviceProperties(prop: void*, device: int) -> int;
+extern fn cudaSetDevice(device: int) -> int;
+extern fn cudaGetLastError() -> int;
+extern fn cudaDriverGetVersion(version: int*) -> int;
+extern fn cudaRuntimeGetVersion(version: int*) -> int;
+extern fn cudaMemGetInfo(free: usize*, total: usize*) -> int;
+extern fn cudaDeviceReset() -> int;
+
+// CUDA Constants (from cuda_runtime.h)
+def cudaMemcpyHostToDevice = 1;
+def cudaMemcpyDeviceToHost = 2;
+def cudaMemcpyDeviceToDevice = 3;
 
 // Memory Management.
 

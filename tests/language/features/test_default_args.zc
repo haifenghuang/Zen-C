@@ -15,7 +15,7 @@ fn operation(a: int, b: int = 5 * 2) -> int {
     return a + b;
 }
 
-fn main() {
+fn main() -> i32 {
     let p1 = Point { x: 5, y: 5 };
     let res1 = add_points(p1);
     
@@ -36,4 +36,5 @@ fn main() {
     
     println "operation(10, 5): {operation(10, 5)}";
     assert(operation(10, 5) == 15, "result is not 15");
+    return 0;
 }

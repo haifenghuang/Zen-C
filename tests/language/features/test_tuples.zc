@@ -31,4 +31,5 @@ fn main() {
     let (a, b) = get_pair();
     assert(a == 10, "Destructured a");
     assert(b == 20, "Destructured b");
+    return 0;
 }

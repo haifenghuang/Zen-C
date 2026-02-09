@@ -78,6 +78,14 @@ Type *type_new_ptr(Type *inner)
     return t;
 }
 
+Type *type_new_array(Type *inner, int size)
+{
+    Type *t = type_new(TYPE_ARRAY);
+    t->inner = inner;
+    t->array_size = size;
+    return t;
+}
+
 int is_char_ptr(Type *t)
 {
     // Handle both primitive char* and legacy struct char*.

@@ -234,7 +234,7 @@ typedef struct
     int use_objc;        ///< 1 if --objc (emit Objective-C compatible code).
     int mode_lsp;        ///< 1 if 'lsp' command (Language Server Protocol).
     int json_output;     ///< 1 if --json (emit structured JSON diagnostics).
-    int no_typecheck;    ///< 1 if --no-typecheck (disable semantic analysis).
+    int use_typecheck;   ///< 1 if --typecheck (enable manual semantic analysis).
 
     int keep_comments; ///< 1 if --keep-comments (preserve comments in output).
 

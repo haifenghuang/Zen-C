@@ -313,6 +313,7 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
         if (!ctx->skip_preamble)
         {
             emit_preamble(ctx, out);
+            fflush(out);
         }
         emit_includes_and_aliases(kids, out);
 
@@ -485,7 +486,6 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
         EmittedContent *emitted_raw = NULL;
 
         // First pass: emit ONLY preprocessor directives before struct defs
-        // so that macros like `panic` are available in function bodies
         ASTNode *raw_iter = kids;
         while (raw_iter)
         {

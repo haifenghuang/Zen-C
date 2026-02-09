@@ -15,4 +15,5 @@ fn main() {
     assert(get_value(&b2) == 100, "Value should be 100");
 
     println "Opaque struct test passed";
+    return 0;
 }

@@ -94,6 +94,25 @@ static int is_safe_to_copy(TypeChecker *tc, Type *t)
     return is_type_copy(tc->pctx, t);
 }
 
+static int is_char_type(Type *t)
+{
+    if (!t)
+    {
+        return 0;
+    }
+    if (t->kind == TYPE_CHAR || t->kind == TYPE_I8 || t->kind == TYPE_U8 ||
+        t->kind == TYPE_C_CHAR || t->kind == TYPE_C_UCHAR)
+    {
+        return 1;
+    }
+    // Also handle struct wrappers for char (if any)
+    if (t->kind == TYPE_STRUCT && t->name && strcmp(t->name, "char") == 0)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 static void check_use_validity(TypeChecker *tc, ASTNode *var_node, ZenSymbol *sym)
 {
     if (!sym || !var_node)
@@ -129,6 +148,8 @@ static void mark_symbol_moved(TypeChecker *tc, ZenSymbol *sym, ASTNode *context_
     }
 }
 
+// check_expr_var defined below
+
 static void mark_symbol_valid(TypeChecker *tc, ZenSymbol *sym)
 {
     (void)tc;
@@ -142,6 +163,15 @@ static void mark_symbol_valid(TypeChecker *tc, ZenSymbol *sym)
 
 static void check_node(TypeChecker *tc, ASTNode *node);
 static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, Token t);
+
+static Type *resolve_alias(Type *t)
+{
+    while (t && t->kind == TYPE_ALIAS && t->inner)
+    {
+        t = t->inner;
+    }
+    return t;
+}
 
 static void check_expr_unary(TypeChecker *tc, ASTNode *node)
 {
@@ -180,22 +210,20 @@ static void check_expr_unary(TypeChecker *tc, ASTNode *node)
     // Dereference: *
     if (strcmp(op, "*") == 0)
     {
-        if (operand_type->kind != TYPE_POINTER)
+        Type *resolved = resolve_alias(operand_type);
+        if (resolved->kind != TYPE_POINTER && resolved->kind != TYPE_STRING)
         {
             const char *hints[] = {"Only pointers can be dereferenced", NULL};
             tc_error_with_hints(tc, node->token, "Cannot dereference non-pointer type", hints);
         }
-        else if (operand_type->inner)
+        else if (resolved->kind == TYPE_STRING)
         {
-            node->type_info = operand_type->inner;
+            node->type_info = type_new(TYPE_CHAR);
         }
-        return;
-    }
-
-    // Address-of: &
-    if (strcmp(op, "&") == 0)
-    {
-        node->type_info = type_new_ptr(operand_type);
+        else if (resolved->inner)
+        {
+            node->type_info = resolved->inner;
+        }
         return;
     }
 
@@ -283,6 +311,35 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
 
         if (left_type && right_type)
         {
+            Type *lhs_resolved = resolve_alias(left_type);
+            Type *rhs_resolved = resolve_alias(right_type);
+
+            // Pointer Arithmetic
+            if (lhs_resolved->kind == TYPE_POINTER || lhs_resolved->kind == TYPE_STRING)
+            {
+                // Ptr - Ptr -> isize
+                if (strcmp(op, "-") == 0 &&
+                    (rhs_resolved->kind == TYPE_POINTER || rhs_resolved->kind == TYPE_STRING))
+                {
+                    node->type_info = type_new(TYPE_ISIZE);
+                    return;
+                }
+                // Ptr + Int -> Ptr
+                // Ptr - Int -> Ptr
+                if ((strcmp(op, "+") == 0 || strcmp(op, "-") == 0) && is_integer_type(rhs_resolved))
+                {
+                    node->type_info = left_type;
+                    return;
+                }
+            }
+            // Int + Ptr -> Ptr
+            if (strcmp(op, "+") == 0 && is_integer_type(lhs_resolved) &&
+                (rhs_resolved->kind == TYPE_POINTER || rhs_resolved->kind == TYPE_STRING))
+            {
+                node->type_info = right_type;
+                return;
+            }
+
             int left_numeric = is_integer_type(left_type) || is_float_type(left_type);
             int right_numeric = is_integer_type(right_type) || is_float_type(right_type);
 
@@ -402,6 +459,15 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
 
         if (!sig)
         {
+            // Check if it's a built-in macro injected by the compiler
+            if (strcmp(func_name, "_z_str") == 0)
+            {
+                // _z_str is a generic format macro from ZC_C_GENERIC_STR
+                check_node(tc, node->call.args); // Still check the argument
+                node->type_info = type_new(TYPE_STRING);
+                return;
+            }
+
             // Check local scope first, then global symbols
             ZenSymbol *sym = tc_lookup(tc, func_name);
             if (!sym)
@@ -600,6 +666,30 @@ static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, 
         return 1;
     }
 
+    // Array decay: Array[T] -> T*
+    // This allows passing a fixed-size array where a pointer is expected.
+    if (resolved_target->kind == TYPE_POINTER && resolved_value->kind == TYPE_ARRAY)
+    {
+        if (resolved_target->inner && resolved_value->inner)
+        {
+            // Recursive check for inner types (e.g. char* <- char[10])
+            if (type_eq(resolved_target->inner, resolved_value->inner))
+            {
+                return 1;
+            }
+            // Allow char* <- char[N] explicitly if type_eq is too strict
+            if (is_char_type(resolved_target->inner) && is_char_type(resolved_value->inner))
+            {
+                return 1;
+            }
+        }
+    }
+
+    if (is_integer_type(resolved_target) && is_integer_type(resolved_value))
+    {
+        return 1;
+    }
+
     // Float compatibility
     if (is_float_type(resolved_target) && is_float_type(resolved_value))
     {
@@ -742,7 +832,10 @@ static void check_function(TypeChecker *tc, ASTNode *node)
     const char *ret_type = node->func.ret_type;
     int is_void = !ret_type || strcmp(ret_type, "void") == 0;
 
-    if (!is_void && node->func.body)
+    // Special case: 'main' is allowed to fall off the end (C99 implicit return 0)
+    int is_main = node->func.name && strcmp(node->func.name, "main") == 0;
+
+    if (!is_void && !is_main && node->func.body)
     {
         if (!block_always_returns(node->func.body))
         {
@@ -774,6 +867,91 @@ static void check_expr_var(TypeChecker *tc, ASTNode *node)
     check_use_validity(tc, node, sym);
 }
 
+static void check_expr_literal(TypeChecker *tc, ASTNode *node)
+{
+    (void)tc;
+    switch (node->literal.type_kind)
+    {
+    case LITERAL_INT:
+        node->type_info = type_new(TYPE_I32); // Default to i32, or use suffix if we had one
+        break;
+    case LITERAL_FLOAT:
+        node->type_info = type_new(TYPE_F64); // Default to f64
+        break;
+    case LITERAL_STRING:
+        node->type_info = type_new(TYPE_STRING);
+        break;
+    case LITERAL_CHAR:
+        node->type_info = type_new(TYPE_CHAR);
+        break;
+    default:
+        break;
+    }
+}
+
+static void check_struct_init(TypeChecker *tc, ASTNode *node)
+{
+    // Find struct definition
+    ASTNode *def = find_struct_def(tc->pctx, node->struct_init.struct_name);
+    if (!def)
+    {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Unknown struct '%s'", node->struct_init.struct_name);
+        tc_error(tc, node->token, msg);
+        return;
+    }
+
+    // Iterate provided fields
+    ASTNode *field_init = node->struct_init.fields;
+    while (field_init)
+    {
+        // Check the initialization expression
+        check_node(tc, field_init->var_decl.init_expr);
+
+        // Find corresponding field in definition
+        ASTNode *def_field = def->strct.fields;
+        Type *expected_type = NULL;
+        int found = 0;
+
+        while (def_field)
+        {
+            if (def_field->type == NODE_FIELD &&
+                strcmp(def_field->field.name, field_init->var_decl.name) == 0)
+            {
+                found = 1;
+                expected_type = def_field->type_info;
+                break;
+            }
+            def_field = def_field->next;
+        }
+
+        if (!found)
+        {
+            char msg[256];
+            snprintf(msg, sizeof(msg), "Struct '%s' has no field named '%s'",
+                     node->struct_init.struct_name, field_init->var_decl.name);
+            tc_error(tc, field_init->token, msg);
+        }
+        else if (expected_type && field_init->var_decl.init_expr->type_info)
+        {
+            check_type_compatibility(tc, expected_type, field_init->var_decl.init_expr->type_info,
+                                     field_init->token);
+        }
+
+        // Move Analysis: If initializing from another variable, it moves.
+        if (field_init->var_decl.init_expr->type == NODE_EXPR_VAR)
+        {
+            ZenSymbol *init_sym = tc_lookup(tc, field_init->var_decl.init_expr->var_ref.name);
+            if (init_sym)
+            {
+                mark_symbol_moved(tc, init_sym, node);
+            }
+        }
+
+        field_init = field_init->next;
+    }
+}
+
 static void check_node(TypeChecker *tc, ASTNode *node)
 {
     if (!node)
@@ -784,8 +962,15 @@ static void check_node(TypeChecker *tc, ASTNode *node)
     switch (node->type)
     {
     case NODE_ROOT:
-        check_node(tc, node->root.children);
-        break;
+    {
+        ASTNode *child = node->root.children;
+        while (child)
+        {
+            check_node(tc, child);
+            child = child->next;
+        }
+    }
+    break;
     case NODE_BLOCK:
         check_block(tc, node);
         break;
@@ -797,6 +982,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         break;
     case NODE_EXPR_VAR:
         check_expr_var(tc, node);
+        break;
+    case NODE_EXPR_LITERAL:
+        check_expr_literal(tc, node);
         break;
     case NODE_RETURN:
         if (node->ret.value)
@@ -831,9 +1019,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         // Validate condition is boolean-compatible
         if (node->if_stmt.condition && node->if_stmt.condition->type_info)
         {
-            Type *cond_type = node->if_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->if_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"If conditions must be boolean, integer, or pointer", NULL};
                 tc_error_with_hints(tc, node->if_stmt.condition->token,
@@ -876,9 +1064,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         // Validate condition is boolean-compatible
         if (node->while_stmt.condition && node->while_stmt.condition->type_info)
         {
-            Type *cond_type = node->while_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->while_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"While conditions must be boolean, integer, or pointer",
                                        NULL};
@@ -895,9 +1083,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         // Validate condition is boolean-compatible
         if (node->for_stmt.condition && node->for_stmt.condition->type_info)
         {
-            Type *cond_type = node->for_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->for_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"For conditions must be boolean, integer, or pointer", NULL};
                 tc_error_with_hints(tc, node->for_stmt.condition->token,
@@ -971,9 +1159,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         check_node(tc, node->guard_stmt.condition);
         if (node->guard_stmt.condition && node->guard_stmt.condition->type_info)
         {
-            Type *cond_type = node->guard_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->guard_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"Guard conditions must be boolean, integer, or pointer",
                                        NULL};
@@ -988,9 +1176,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         check_node(tc, node->unless_stmt.condition);
         if (node->unless_stmt.condition && node->unless_stmt.condition->type_info)
         {
-            Type *cond_type = node->unless_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->unless_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"Unless conditions must be boolean, integer, or pointer",
                                        NULL};
@@ -1005,9 +1193,9 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         check_node(tc, node->assert_stmt.condition);
         if (node->assert_stmt.condition && node->assert_stmt.condition->type_info)
         {
-            Type *cond_type = node->assert_stmt.condition->type_info;
+            Type *cond_type = resolve_alias(node->assert_stmt.condition->type_info);
             if (cond_type->kind != TYPE_BOOL && !is_integer_type(cond_type) &&
-                cond_type->kind != TYPE_POINTER)
+                cond_type->kind != TYPE_POINTER && cond_type->kind != TYPE_STRING)
             {
                 const char *hints[] = {"Assert conditions must be boolean, integer, or pointer",
                                        NULL};
@@ -1038,7 +1226,82 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         }
         break;
     case NODE_EXPR_ARRAY_LITERAL:
-        check_node(tc, node->array_literal.elements);
+    {
+        ASTNode *elem = node->array_literal.elements;
+        Type *elem_type = NULL;
+        int count = 0;
+        while (elem)
+        {
+            check_node(tc, elem);
+            if (!elem_type && elem->type_info && elem->type_info->kind != TYPE_UNKNOWN)
+            {
+                elem_type = elem->type_info;
+            }
+            count++;
+            elem = elem->next;
+        }
+        if (elem_type)
+        {
+            node->type_info = type_new_array(elem_type, count);
+        }
+        else
+        {
+            node->type_info = type_new_array(type_new(TYPE_UNKNOWN), count);
+        }
+    }
+    break;
+    case NODE_EXPR_STRUCT_INIT:
+        check_struct_init(tc, node);
+        break;
+    case NODE_LOOP:
+        // Infinite loop - check body
+        check_node(tc, node->loop_stmt.body);
+        break;
+    case NODE_REPEAT:
+        // Repeat loop - check body
+        check_node(tc, node->repeat_stmt.body);
+        break;
+    case NODE_TERNARY:
+        check_node(tc, node->ternary.cond);
+        check_node(tc, node->ternary.true_expr);
+        check_node(tc, node->ternary.false_expr);
+        // Validate condition
+        if (node->ternary.cond && node->ternary.cond->type_info)
+        {
+            Type *t = node->ternary.cond->type_info;
+            if (t->kind != TYPE_BOOL && !is_integer_type(t) && t->kind != TYPE_POINTER)
+            {
+                tc_error(tc, node->ternary.cond->token, "Ternary condition must be truthy");
+            }
+        }
+        // Validate branch compatibility
+        if (node->ternary.true_expr && node->ternary.false_expr)
+        {
+            Type *t1 = node->ternary.true_expr->type_info;
+            Type *t2 = node->ternary.false_expr->type_info;
+            if (t1 && t2)
+            {
+                // Loose compatibility check
+                if (!check_type_compatibility(tc, t1, t2, node->token))
+                {
+                    // Error reported by check_type_compatibility
+                }
+                else
+                {
+                    node->type_info = t1; // Inherit type
+                }
+            }
+        }
+        break;
+    case NODE_ASM:
+        // TODO: Implement.
+        break;
+    case NODE_EXPR_SIZEOF:
+        if (node->size_of.expr)
+        {
+            check_node(tc, node->size_of.expr);
+        }
+        node->type_info = type_new(TYPE_I32);
         break;
     default:
         // Generic recursion for lists and other nodes.
@@ -1056,11 +1319,6 @@ static void check_node(TypeChecker *tc, ASTNode *node)
             }
         }
         break;
-    }
-
-    if (node->next)
-    {
-        check_node(tc, node->next);
     }
 }
 

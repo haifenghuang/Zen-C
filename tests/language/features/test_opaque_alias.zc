@@ -10,4 +10,5 @@ fn main() {
     assert(compare_handles(h, h2), "Equality FAIL");
 
     println "Opaque Alias OK";
+    return 0;
 }

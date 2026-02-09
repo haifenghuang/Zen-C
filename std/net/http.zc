@@ -231,6 +231,7 @@ import "./url.zc"
 import "./dns.zc"
 
 extern fn atoi(s: const char*) -> int;
+extern fn strstr(haystack: const char*, needle: const char*) -> char*;
 
 fn fetch(url: String) -> Response {
     let u_res = Url::parse(url);

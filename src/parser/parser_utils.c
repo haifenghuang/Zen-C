@@ -22,6 +22,188 @@ Token expect(Lexer *l, TokenType type, const char *msg)
     return t;
 }
 
+// Helper to check if a type name is a primitive type
+int is_primitive_type_name(const char *name)
+{
+    if (!name)
+    {
+        return 0;
+    }
+    // TODO: Add more types (it's late, I will do it tomorrow).
+    return strcmp(name, "int") == 0 || strcmp(name, "i32") == 0 || strcmp(name, "u8") == 0 ||
+           strcmp(name, "i8") == 0 || strcmp(name, "i16") == 0 || strcmp(name, "u16") == 0 ||
+           strcmp(name, "u32") == 0 || strcmp(name, "i64") == 0 || strcmp(name, "u64") == 0 ||
+           strcmp(name, "f32") == 0 || strcmp(name, "float") == 0 || strcmp(name, "f64") == 0 ||
+           strcmp(name, "double") == 0 || strcmp(name, "void") == 0 || strcmp(name, "bool") == 0 ||
+           strcmp(name, "char") == 0 || strcmp(name, "usize") == 0 || strcmp(name, "isize") == 0 ||
+           strcmp(name, "uint") == 0 || strcmp(name, "byte") == 0 ||
+           // C-style types returned by type_to_string
+           strcmp(name, "int8_t") == 0 || strcmp(name, "uint8_t") == 0 ||
+           strcmp(name, "int16_t") == 0 || strcmp(name, "uint16_t") == 0 ||
+           strcmp(name, "int32_t") == 0 || strcmp(name, "uint32_t") == 0 ||
+           strcmp(name, "int64_t") == 0 || strcmp(name, "uint64_t") == 0 ||
+           strcmp(name, "size_t") == 0 || strcmp(name, "ptrdiff_t") == 0;
+}
+
+// Forward declaration
+char *ast_to_string(ASTNode *node);
+
+// Temporary lightweight AST printer for default args
+// Comprehensive AST printer for default args and other code generation needs
+char *ast_to_string(ASTNode *node)
+{
+    if (!node)
+    {
+        return xstrdup("");
+    }
+
+    char *buf = xmalloc(4096);
+    buf[0] = 0;
+
+    switch (node->type)
+    {
+    case NODE_EXPR_LITERAL:
+        if (node->literal.type_kind == LITERAL_INT)
+        {
+            sprintf(buf, "%llu", node->literal.int_val);
+        }
+        else if (node->literal.type_kind == LITERAL_FLOAT)
+        {
+            sprintf(buf, "%f", node->literal.float_val);
+        }
+        else if (node->literal.type_kind == LITERAL_STRING)
+        {
+            sprintf(buf, "\"%s\"", node->literal.string_val);
+        }
+        else if (node->literal.type_kind == LITERAL_CHAR)
+        {
+            if (node->literal.int_val == '\'')
+            {
+                sprintf(buf, "'\\''");
+            }
+            else if (node->literal.int_val == '\n')
+            {
+                sprintf(buf, "'\\n'");
+            }
+            else if (node->literal.int_val == '\\')
+            {
+                sprintf(buf, "'\\\\'");
+            }
+            else if (node->literal.int_val == '\0')
+            {
+                sprintf(buf, "'\\0'");
+            }
+            else
+            {
+                sprintf(buf, "'%c'", (char)node->literal.int_val);
+            }
+        }
+        break;
+    case NODE_EXPR_VAR:
+        strcpy(buf, node->var_ref.name);
+        break;
+    case NODE_EXPR_BINARY:
+    {
+        char *l = ast_to_string(node->binary.left);
+        char *r = ast_to_string(node->binary.right);
+        // Add parens to be safe
+        sprintf(buf, "(%s %s %s)", l, node->binary.op, r);
+        free(l);
+        free(r);
+        break;
+    }
+    case NODE_EXPR_UNARY:
+    {
+        char *o = ast_to_string(node->unary.operand);
+        sprintf(buf, "(%s%s)", node->unary.op, o);
+        free(o);
+        break;
+    }
+    case NODE_EXPR_CAST:
+    {
+        char *e = ast_to_string(node->cast.expr);
+        sprintf(buf, "((%s)%s)", node->cast.target_type, e);
+        free(e);
+        break;
+    }
+    case NODE_EXPR_CALL:
+    {
+        char *callee = ast_to_string(node->call.callee);
+        sprintf(buf, "%s(", callee);
+        free(callee);
+
+        ASTNode *arg = node->call.args;
+        int first = 1;
+        while (arg)
+        {
+            if (!first)
+            {
+                strcat(buf, ", ");
+            }
+            char *a = ast_to_string(arg);
+            if (strlen(buf) + strlen(a) < 4090)
+            {
+                strcat(buf, a);
+            }
+            free(a);
+            first = 0;
+            arg = arg->next;
+        }
+        strcat(buf, ")");
+        break;
+    }
+    case NODE_EXPR_STRUCT_INIT:
+    {
+        char *name = node->struct_init.struct_name;
+        sprintf(buf, "%s{", name);
+
+        ASTNode *field = node->struct_init.fields;
+        int first = 1;
+        while (field)
+        {
+            if (!first)
+            {
+                strcat(buf, ", ");
+            }
+
+            if (field->type == NODE_VAR_DECL)
+            {
+                strcat(buf, field->var_decl.name);
+                strcat(buf, ": ");
+                char *val = ast_to_string(field->var_decl.init_expr);
+                strcat(buf, val);
+                free(val);
+            }
+
+            first = 0;
+            field = field->next;
+        }
+        strcat(buf, "}");
+        break;
+    }
+    case NODE_EXPR_MEMBER:
+    {
+        char *t = ast_to_string(node->member.target);
+        sprintf(buf, "%s.%s", t, node->member.field);
+        free(t);
+        break;
+    }
+    case NODE_EXPR_INDEX:
+    {
+        char *arr = ast_to_string(node->index.array);
+        char *idx = ast_to_string(node->index.index);
+        sprintf(buf, "%s[%s]", arr, idx);
+        free(arr);
+        free(idx);
+        break;
+    }
+    default:
+        // Minimal fallback
+        break;
+    }
+    return buf;
+}
+
 int is_token(Token t, const char *s)
 {
     int len = strlen(s);
@@ -1570,6 +1752,39 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         new_node->func.args = tmp_args;
 
         new_node->func.ret_type_info = replace_type_formal(n->func.ret_type_info, p, c, os, ns);
+
+        // Deep copy default values AST if present
+        if (n->func.default_values && n->func.arg_count > 0)
+        {
+            new_node->func.default_values = xmalloc(sizeof(ASTNode *) * n->func.arg_count);
+            // We also need to regenerate the string defaults array based on the substituted ASTs
+            // This ensures potential generic params in default values (T{}) are updated (i32{})
+            // in the string representation used by codegen.
+            char **new_defaults_strs = xmalloc(sizeof(char *) * n->func.arg_count);
+
+            for (int i = 0; i < n->func.arg_count; i++)
+            {
+                if (n->func.default_values[i])
+                {
+                    new_node->func.default_values[i] =
+                        copy_ast_replacing(n->func.default_values[i], p, c, os, ns);
+                    new_defaults_strs[i] = ast_to_string(new_node->func.default_values[i]);
+                }
+                else
+                {
+                    new_node->func.default_values[i] = NULL;
+                    new_defaults_strs[i] = NULL;
+                }
+            }
+            // Replace the old string-based defaults with our regenerated ones
+            // Note: We leak the old 'tmp_args' calculated above, but that's just a single string
+            // for valid args The 'defaults' array in func struct is what matters for function
+            // definition. Wait, NODE_FUNCTION has char *args (legacy) AND char **defaults (array).
+            // parse_and_convert_args populated both.
+            // We need to update new_node->func.defaults.
+            new_node->func.defaults = new_defaults_strs;
+        }
+
         if (n->func.arg_types)
         {
             new_node->func.arg_types = xmalloc(sizeof(Type *) * n->func.arg_count);
@@ -3382,9 +3597,9 @@ char *consume_and_rewrite(ParserContext *ctx, Lexer *l)
     return rw;
 }
 
-char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out, int *count_out,
-                             Type ***types_out, char ***names_out, int *is_varargs_out,
-                             char ***ctype_overrides_out)
+char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
+                             ASTNode ***default_values_out, int *count_out, Type ***types_out,
+                             char ***names_out, int *is_varargs_out, char ***ctype_overrides_out)
 {
     Token t = lexer_next(l);
     if (t.type != TOK_LPAREN)
@@ -3396,6 +3611,7 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
     buf[0] = 0;
     int count = 0;
     char **defaults = xmalloc(sizeof(char *) * 16);
+    ASTNode **default_values = xmalloc(sizeof(ASTNode *) * 16);
     Type **types = xmalloc(sizeof(Type *) * 16);
     char **names = xmalloc(sizeof(char *) * 16);
     char **ctype_overrides = xmalloc(sizeof(char *) * 16);
@@ -3403,6 +3619,7 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
     for (int i = 0; i < 16; i++)
     {
         defaults[i] = NULL;
+        default_values[i] = NULL;
         types[i] = NULL;
         names[i] = NULL;
         ctype_overrides[i] = NULL;
@@ -3562,38 +3779,12 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
                 {
                     lexer_next(l); // consume =
 
-                    const char *start_ptr = lexer_peek(l).start;
-                    int nesting = 0;
-                    while (1)
-                    {
-                        Token t = lexer_peek(l);
-                        if (t.type == TOK_EOF)
-                        {
-                            zpanic_at(t, "Unexpected EOF in default arg");
-                        }
+                    // Parse the expression into an AST node
+                    ASTNode *def_node = parse_expression(ctx, l);
 
-                        if (nesting == 0 && (t.type == TOK_COMMA || t.type == TOK_RPAREN))
-                        {
-                            break;
-                        }
-
-                        if (t.type == TOK_LPAREN || t.type == TOK_LBRACE || t.type == TOK_LBRACKET)
-                        {
-                            nesting++;
-                        }
-                        if (t.type == TOK_RPAREN || t.type == TOK_RBRACE || t.type == TOK_RBRACKET)
-                        {
-                            nesting--;
-                        }
-
-                        lexer_next(l);
-                    }
-                    const char *end_ptr = lexer_peek(l).start;
-                    size_t len = end_ptr - start_ptr;
-                    char *def_val = xmalloc(len + 1);
-                    strncpy(def_val, start_ptr, len);
-                    def_val[len] = 0;
-                    defaults[count - 1] = def_val;
+                    // Store both the AST node and the reconstructed string for legacy support
+                    default_values[count - 1] = def_node;
+                    defaults[count - 1] = ast_to_string(def_node);
                 }
             }
             if (lexer_peek(l).type == TOK_COMMA)
@@ -3627,6 +3818,7 @@ char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
     }
 
     *defaults_out = defaults;
+    *default_values_out = default_values;
     *count_out = count;
     *types_out = types;
     *names_out = names;

@@ -17,6 +17,7 @@ fn main() {
         Shape::Circle(r) => {
             exit(1);
         }
+        _ => { exit(1); }
     }
     assert(matched == 1, "Matched Rect");
 
@@ -29,4 +30,5 @@ fn main() {
             exit(1);
         }
     }
+    return 0;
 }

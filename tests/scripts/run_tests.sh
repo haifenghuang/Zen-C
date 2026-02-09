@@ -41,13 +41,25 @@ while read -r test_file; do
     output=$($ZC run "$test_file" "$@" 2>&1)
     exit_code=$?
     
-    if [ $exit_code -eq 0 ]; then
-        echo "PASS"
-        ((PASSED++))
+    # Check for expected failure annotation
+    if grep -q "// EXPECT: FAIL" "$test_file"; then
+        if [ $exit_code -ne 0 ]; then
+            echo "PASS (Expected Failure)"
+            ((PASSED++))
+        else
+            echo "FAIL (Unexpected Success)"
+            ((FAILED++))
+            FAILED_TESTS="$FAILED_TESTS\n- $test_file (Unexpected Success)"
+        fi
     else
-        echo "FAIL"
-        ((FAILED++))
-        FAILED_TESTS="$FAILED_TESTS\n- $test_file"
+        if [ $exit_code -eq 0 ]; then
+            echo "PASS"
+            ((PASSED++))
+        else
+            echo "FAIL"
+            ((FAILED++))
+            FAILED_TESTS="$FAILED_TESTS\n- $test_file"
+        fi
     fi
 done < <(find "$TEST_DIR" -name "*.zc" -not -name "_*.zc" | sort)
 

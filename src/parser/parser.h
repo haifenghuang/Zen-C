@@ -493,14 +493,49 @@ void register_generic(ParserContext *ctx, char *name);
  */
 int is_known_generic(ParserContext *ctx, char *name);
 
+/**
+ * @brief Checks if a name is a primitive type.
+ */
+int is_primitive_type_name(const char *name);
+
+/**
+ * @brief Registers an implementation template.
+ */
 void register_impl_template(ParserContext *ctx, const char *sname, const char *param,
                             ASTNode *node);
+/**
+ * @brief Adds a struct to the list.
+ */
 void add_to_struct_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Adds an enum to the list.
+ */
 void add_to_enum_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Adds a function to the list.
+ */
 void add_to_func_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Adds an implementation to the list.
+ */
 void add_to_impl_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Adds a global to the list.
+ */
 void add_to_global_list(ParserContext *ctx, ASTNode *node);
+
+/**
+ * @brief Registers built-in types and functions.
+ */
 void register_builtins(ParserContext *ctx);
+
+/**
+ * @brief Adds an instantiated function to the list.
+ */
 void add_instantiated_func(ParserContext *ctx, ASTNode *fn);
 
 /**
@@ -567,9 +602,9 @@ ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_nam
 /**
  * @brief Parses and converts arguments.
  */
-char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out, int *count_out,
-                             Type ***types_out, char ***names_out, int *is_varargs_out,
-                             char ***ctype_overrides_out);
+char *parse_and_convert_args(ParserContext *ctx, Lexer *l, char ***defaults_out,
+                             ASTNode ***default_values_out, int *count_out, Type ***types_out,
+                             char ***names_out, int *is_varargs_out, char ***ctype_overrides_out);
 
 /**
  * @brief Checks if a file has been imported.
