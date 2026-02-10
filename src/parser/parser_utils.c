@@ -72,13 +72,24 @@ void try_parse_macro_const(ParserContext *ctx, const char *content)
         // Safety check for C casts/pointers that cause compiler crash in expression parser
         if (ct.type == TOK_IDENT)
         {
-            if (is_token(ct, "void") || is_token(ct, "char") || is_token(ct, "short") ||
-                is_token(ct, "int") || is_token(ct, "long") || is_token(ct, "float") ||
-                is_token(ct, "double") || is_token(ct, "signed") || is_token(ct, "unsigned") ||
-                is_token(ct, "struct") || is_token(ct, "union") || is_token(ct, "enum") ||
-                is_token(ct, "const") || is_token(ct, "volatile") || is_token(ct, "extern") ||
-                is_token(ct, "static") || is_token(ct, "register") || is_token(ct, "auto") ||
-                is_token(ct, "typedef"))
+            char *tok_str = token_strdup(ct);
+            int is_prim = is_primitive_type_name(tok_str);
+
+            // Check other keywords not covered by is_primitive_type_name
+            if (!is_prim)
+            {
+                if (is_token(ct, "signed") || is_token(ct, "unsigned") || is_token(ct, "struct") ||
+                    is_token(ct, "union") || is_token(ct, "enum") || is_token(ct, "const") ||
+                    is_token(ct, "volatile") || is_token(ct, "extern") || is_token(ct, "static") ||
+                    is_token(ct, "register") || is_token(ct, "auto") || is_token(ct, "typedef"))
+                {
+                    is_prim = 1;
+                }
+            }
+
+            free(tok_str);
+
+            if (is_prim)
             {
                 return;
             }
@@ -2023,26 +2034,48 @@ ASTNode *copy_ast_replacing(ASTNode *n, const char *p, const char *c, const char
         new_node->cast.expr = copy_ast_replacing(n->cast.expr, p, c, os, ns);
         break;
     case NODE_EXPR_STRUCT_INIT:
-        new_node->struct_init.struct_name =
-            replace_type_str(n->struct_init.struct_name, p, c, os, ns);
-        ASTNode *h = NULL, *t = NULL, *curr = n->struct_init.fields;
-        while (curr)
+    {
+        char *new_name = replace_type_str(n->struct_init.struct_name, p, c, os, ns);
+
+        int is_ptr = 0;
+        size_t len = strlen(new_name);
+        if (len > 0 && new_name[len - 1] == '*')
         {
-            ASTNode *cp = copy_ast_replacing(curr, p, c, os, ns);
-            cp->next = NULL;
-            if (!h)
-            {
-                h = cp;
-            }
-            else
-            {
-                t->next = cp;
-            }
-            t = cp;
-            curr = curr->next;
+            is_ptr = 1;
         }
-        new_node->struct_init.fields = h;
+
+        int is_primitive = is_primitive_type_name(new_name);
+
+        if ((is_ptr || is_primitive) && !n->struct_init.fields)
+        {
+            new_node->type = NODE_EXPR_LITERAL;
+            new_node->literal.type_kind = LITERAL_INT;
+            new_node->literal.int_val = 0;
+            free(new_name);
+        }
+        else
+        {
+            new_node->struct_init.struct_name = new_name;
+            ASTNode *h = NULL, *t = NULL, *curr = n->struct_init.fields;
+            while (curr)
+            {
+                ASTNode *cp = copy_ast_replacing(curr, p, c, os, ns);
+                cp->next = NULL;
+                if (!h)
+                {
+                    h = cp;
+                }
+                else
+                {
+                    t->next = cp;
+                }
+                t = cp;
+                curr = curr->next;
+            }
+            new_node->struct_init.fields = h;
+        }
         break;
+    }
     case NODE_IF:
         new_node->if_stmt.condition = copy_ast_replacing(n->if_stmt.condition, p, c, os, ns);
         new_node->if_stmt.then_body = copy_ast_replacing(n->if_stmt.then_body, p, c, os, ns);
@@ -2178,13 +2211,7 @@ char *unmangle_ptr_suffix(const char *s)
     char *result = xmalloc(strlen(base) + 16);
 
     // Check if base is a primitive type
-    if (strcmp(base, "int") == 0 || strcmp(base, "char") == 0 || strcmp(base, "float") == 0 ||
-        strcmp(base, "double") == 0 || strcmp(base, "bool") == 0 || strcmp(base, "void") == 0 ||
-        strcmp(base, "size_t") == 0 || strcmp(base, "usize") == 0 ||
-        strncmp(base, "int8", 4) == 0 || strncmp(base, "int16", 5) == 0 ||
-        strncmp(base, "int32", 5) == 0 || strncmp(base, "int64", 5) == 0 ||
-        strncmp(base, "uint8", 5) == 0 || strncmp(base, "uint16", 6) == 0 ||
-        strncmp(base, "uint32", 6) == 0 || strncmp(base, "uint64", 6) == 0)
+    if (is_primitive_type_name(base))
     {
         sprintf(result, "%s*", base);
     }
