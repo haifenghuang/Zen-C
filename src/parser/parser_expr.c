@@ -2511,10 +2511,9 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 }
                 if (gtpl && gtpl->struct_node && gtpl->struct_node->type == NODE_STRUCT)
                 {
-                    const char *gen_param =
-                        (gtpl->struct_node->strct.generic_param_count > 0)
-                            ? gtpl->struct_node->strct.generic_params[0]
-                            : "T";
+                    const char *gen_param = (gtpl->struct_node->strct.generic_param_count > 0)
+                                                ? gtpl->struct_node->strct.generic_params[0]
+                                                : "T";
 
                     char *inferred = NULL;
                     ASTNode *init_field = head;
