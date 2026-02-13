@@ -44,6 +44,7 @@ SRCS = src/main.c \
        src/diagnostics/diagnostics.c \
        src/lexer/token.c \
        src/analysis/typecheck.c \
+       src/analysis/move_check.c \
        src/analysis/const_fold.c \
        src/lsp/json_rpc.c \
        src/lsp/lsp_main.c \

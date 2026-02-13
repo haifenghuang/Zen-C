@@ -41,6 +41,7 @@ int check_opaque_alias_compat(ParserContext *ctx, Type *a, Type *b)
 #include "../zen/zen_facts.h"
 #include "../constants.h"
 #include "parser.h"
+#include "analysis/move_check.h"
 #include <ctype.h>
 #include <libgen.h>
 #include <stdio.h>
@@ -123,71 +124,9 @@ int is_struct_type(ParserContext *ctx, const char *type_name)
 Type *get_field_type(ParserContext *ctx, Type *struct_type, const char *field_name);
 char *infer_type(ParserContext *ctx, ASTNode *node); // from codegen
 
-int is_type_copy(ParserContext *ctx, Type *t)
+static void check_move_usage(ParserContext *ctx, ASTNode *node, Token t)
 {
-    if (!t)
-    {
-        return 1; // Default to Copy for unknown types to avoid annoyance
-    }
-
-    switch (t->kind)
-    {
-    case TYPE_INT:
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
-    case TYPE_U8:
-    case TYPE_U16:
-    case TYPE_U32:
-    case TYPE_U64:
-    case TYPE_F32:
-    case TYPE_F64:
-    case TYPE_BOOL:
-    case TYPE_CHAR:
-    case TYPE_VOID:
-    case TYPE_POINTER: // Pointers are Copy
-    case TYPE_FUNCTION:
-    case TYPE_ENUM: // Enums are integers
-    case TYPE_BITINT:
-    case TYPE_UBITINT:
-        return 1;
-
-    case TYPE_STRUCT:
-        // Structs are MOVE by default unless they implement Copy
-        if (check_impl(ctx, "Copy", t->name))
-        {
-            return 1;
-        }
-
-        // If the struct is NOT defined (opaque/C type) and does NOT implement Drop,
-        // treat it as Copy (C behavior).
-        if (!find_struct_def(ctx, t->name) && !check_impl(ctx, "Drop", t->name))
-        {
-            return 1;
-        }
-
-        return 0;
-
-    case TYPE_ARRAY:
-        // Fixed-size arrays of Copy types are themselves Copy
-        // This allows reusing stack buffers like char[32] without move errors
-        return is_type_copy(ctx, t->inner);
-
-    case TYPE_ALIAS:
-        if (t->alias.is_opaque_alias)
-        {
-            return 1;
-        }
-        return is_type_copy(ctx, t->inner);
-
-    default:
-        return 1;
-    }
-}
-
-void check_move_usage(ParserContext *ctx, ASTNode *node, Token t)
-{
+    (void)t;
     if (!node)
     {
         return;
@@ -195,10 +134,7 @@ void check_move_usage(ParserContext *ctx, ASTNode *node, Token t)
     if (node->type == NODE_EXPR_VAR)
     {
         ZenSymbol *sym = find_symbol_entry(ctx, node->var_ref.name);
-        if (sym && sym->is_moved)
-        {
-            zpanic_at(t, "Use of moved value '%s'", node->var_ref.name);
-        }
+        check_use_validity(NULL, node, sym);
     }
 }
 

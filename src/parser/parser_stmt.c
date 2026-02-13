@@ -11,6 +11,7 @@
 #include "../zen/zen_facts.h"
 #include "zprep_plugin.h"
 #include "../codegen/codegen.h"
+#include "analysis/move_check.h"
 
 char *curr_func_ret = NULL;
 char *run_comptime_block(ParserContext *ctx, Lexer *l);
@@ -1076,11 +1077,11 @@ ASTNode *parse_return(ParserContext *ctx, Lexer *l)
         else
         {
             n->ret.value = parse_expression(ctx, l);
-            check_move_usage(ctx, n->ret.value, n->ret.value ? n->ret.value->token : lexer_peek(l));
-
-            // Note: Returning a non-Copy variable effectively moves it out.
-            // We could mark it as moved, but scope ends anyway.
-            // The critical part is checking we aren't returning an ALREADY moved value.
+            if (n->ret.value && n->ret.value->type == NODE_EXPR_VAR)
+            {
+                ZenSymbol *sym = find_symbol_entry(ctx, n->ret.value->var_ref.name);
+                check_use_validity(NULL, n->ret.value, sym);
+            }
         }
     }
 

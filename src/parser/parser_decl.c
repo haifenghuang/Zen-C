@@ -12,6 +12,7 @@
 #include "../zen/zen_facts.h"
 #include "zprep_plugin.h"
 #include "../codegen/codegen.h"
+#include "analysis/move_check.h"
 
 ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async)
 {
@@ -768,25 +769,15 @@ ASTNode *parse_var_decl(ParserContext *ctx, Lexer *l)
     n->var_decl.init_expr = init;
 
     // Move Semantics Logic for Initialization
-    check_move_usage(ctx, init, init ? init->token : name_tok);
     if (init && init->type == NODE_EXPR_VAR)
     {
-        Type *t = find_symbol_type_info(ctx, init->var_ref.name);
-        if (!t)
+        ZenSymbol *s = find_symbol_entry(ctx, init->var_ref.name);
+        if (s)
         {
-            ZenSymbol *s = find_symbol_entry(ctx, init->var_ref.name);
-            if (s)
-            {
-                t = s->type_info;
-            }
-        }
-        if (!is_type_copy(ctx, t))
-        {
-            ZenSymbol *s = find_symbol_entry(ctx, init->var_ref.name);
-            if (s)
-            {
-                s->is_moved = 1;
-            }
+            // Check if source is valid (not already moved)
+            check_use_validity(NULL, init, s);
+            // Mark source as moved (if not Copy)
+            mark_symbol_moved(ctx, s, init);
         }
     }
 

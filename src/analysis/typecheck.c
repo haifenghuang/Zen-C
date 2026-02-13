@@ -1,6 +1,7 @@
 
 #include "typecheck.h"
 #include "diagnostics/diagnostics.h"
+#include "move_check.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -86,14 +87,6 @@ static ZenSymbol *tc_lookup(TypeChecker *tc, const char *name)
     return NULL;
 }
 
-// ** Move Semantics Helpers **
-
-static int is_safe_to_copy(TypeChecker *tc, Type *t)
-{
-    // Use parser's helper if available, or simple heuristic
-    return is_type_copy(tc->pctx, t);
-}
-
 static int is_char_type(Type *t)
 {
     if (!t)
@@ -111,52 +104,6 @@ static int is_char_type(Type *t)
         return 1;
     }
     return 0;
-}
-
-static void check_use_validity(TypeChecker *tc, ASTNode *var_node, ZenSymbol *sym)
-{
-    if (!sym || !var_node)
-    {
-        return;
-    }
-
-    if (sym->is_moved)
-    {
-        char msg[256];
-        snprintf(msg, 255, "Use of moved value '%s'", sym->name);
-
-        const char *hints[] = {"This type owns resources and cannot be implicitly copied",
-                               "Consider using a reference ('&') to borrow the value instead",
-                               NULL};
-        tc_error_with_hints(tc, var_node->token, msg, hints);
-    }
-}
-
-static void mark_symbol_moved(TypeChecker *tc, ZenSymbol *sym, ASTNode *context_node)
-{
-    (void)context_node;
-    if (!sym)
-    {
-        return;
-    }
-
-    // Only move if type is NOT Copy
-    Type *t = sym->type_info;
-    if (t && !is_safe_to_copy(tc, t))
-    {
-        sym->is_moved = 1;
-    }
-}
-
-// check_expr_var defined below
-
-static void mark_symbol_valid(TypeChecker *tc, ZenSymbol *sym)
-{
-    (void)tc;
-    if (sym)
-    {
-        sym->is_moved = 0;
-    }
 }
 
 // ** Node Checkers **
@@ -267,7 +214,7 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
             ZenSymbol *rhs_sym = tc_lookup(tc, node->binary.right->var_ref.name);
             if (rhs_sym)
             {
-                mark_symbol_moved(tc, rhs_sym, node);
+                mark_symbol_moved(tc->pctx, rhs_sym, node);
             }
         }
 
@@ -277,7 +224,7 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
             ZenSymbol *lhs_sym = tc_lookup(tc, node->binary.left->var_ref.name);
             if (lhs_sym)
             {
-                mark_symbol_valid(tc, lhs_sym);
+                mark_symbol_valid(lhs_sym);
             }
         }
 
@@ -558,7 +505,7 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
             ZenSymbol *sym = tc_lookup(tc, arg->var_ref.name);
             if (sym)
             {
-                mark_symbol_moved(tc, sym, node);
+                mark_symbol_moved(tc->pctx, sym, node);
             }
         }
 
@@ -738,7 +685,7 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node)
             ZenSymbol *init_sym = tc_lookup(tc, node->var_decl.init_expr->var_ref.name);
             if (init_sym)
             {
-                mark_symbol_moved(tc, init_sym, node);
+                mark_symbol_moved(tc->pctx, init_sym, node);
             }
         }
     }
@@ -949,7 +896,7 @@ static void check_struct_init(TypeChecker *tc, ASTNode *node)
             ZenSymbol *init_sym = tc_lookup(tc, field_init->var_decl.init_expr->var_ref.name);
             if (init_sym)
             {
-                mark_symbol_moved(tc, init_sym, node);
+                mark_symbol_moved(tc->pctx, init_sym, node);
             }
         }
 
@@ -1374,7 +1321,7 @@ static void check_node(TypeChecker *tc, ASTNode *node)
                 ZenSymbol *sym = tc_lookup(tc, node->ret.value->var_ref.name);
                 if (sym)
                 {
-                    mark_symbol_moved(tc, sym, node);
+                    mark_symbol_moved(tc->pctx, sym, node);
                 }
             }
         }
