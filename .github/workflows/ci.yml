@@ -62,8 +62,8 @@ jobs:
 
     - name: Build
       run: |
-        if [ "${{ matrix.cc }}" = "zig cc" ]; then
-           make  # Build zc with default CC (stable), but test zc using zig cc backend
+        if [ "${{ matrix.cc }}" = "zig cc" ] || [ "${{ matrix.cc }}" = "tcc" ]; then
+           make  # Build zc with default CC (stable), but test zc using zig cc/tcc backend
         else
            make CC="${{ matrix.cc }}"
         fi

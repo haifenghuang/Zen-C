@@ -1369,7 +1369,10 @@ zc run app.zc --cc zig
 
 </details>
 
-### 使用 Zig 构建
+> [!WARNING]
+> **编译器构建警告：** 虽然 **TCC** 和 **Zig CC** 作为 Zen C 程序的后端非常出色，但使用它们构建 *Zen C 编译器本身*可能会通过验证，但会生成无法通过测试的不稳定二进制文件。我们建议使用 **GCC** 或 **Clang** 构建编译器，并仅将 TCC/Zig 用作操作代码的后端。
+
+> [!TIP]### 使用 Zig 构建
 
 Zig 的 `zig cc` 命令提供了 GCC/Clang 的替代方案，具有出色的跨平台编译支持。使用 Zig：
 

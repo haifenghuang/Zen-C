@@ -1404,7 +1404,10 @@ zc run app.zc --cc zig
 
 </details>
 
-### Buildare con Zig
+> [!WARNING]
+> **AVVISO DI COMPILAZIONE:** Sebbene **TCC** e **Zig CC** funzionino ottimamente come backend specifici per i tuoi programmi Zen C, compilare il *compilatore Zen C stesso* con essi potrebbe verificare ma produrre un binario instabile che fallisce i test. Consigliamo di compilare il compilatore con **GCC** o **Clang** e usare TCC/Zig solo come backend per il tuo codice operativo.
+
+> [!TIP]### Buildare con Zig
 
 Il comando `zig cc` di Zig fornisce un rimpiazzamento drop-in per GCC/Clang con eccellente supporto per la cross-compilation. Per usare Zig:
 
