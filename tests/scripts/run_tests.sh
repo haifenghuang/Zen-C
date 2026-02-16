@@ -28,6 +28,9 @@ FAILED_TESTS=""
 # Display which compiler is being used
 CC_NAME="gcc (default)"
 USE_TYPECHECK=0
+filtered_args=()
+sys_type=$(uname -s)
+
 for arg in "$@"; do
     if [ "$prev_arg" = "--cc" ]; then
         CC_NAME="$arg"
@@ -35,8 +38,21 @@ for arg in "$@"; do
     if [ "$arg" = "--typecheck" ]; then
         USE_TYPECHECK=1
     fi
+    
+    # Filter out object files on Windows/MinGW to prevent duplicate symbols
+    if [[ "$sys_type" == *"MINGW"* ]] || [[ "$sys_type" == *"MSYS"* ]] || [[ "$sys_type" == *"CYGWIN"* ]]; then
+        if [[ "$arg" == *".o" ]]; then
+            # Skip object files
+            continue
+        fi
+    fi
+    
+    filtered_args+=("$arg")
     prev_arg="$arg"
 done
+
+# Replace $@ with filtered_args
+set -- "${filtered_args[@]}"
 
 echo "** Running Zen C test suite (compiler: $CC_NAME) **"
 
