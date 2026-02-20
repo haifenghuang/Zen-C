@@ -769,6 +769,9 @@ static void check_function(TypeChecker *tc, ASTNode *node)
     tc->current_func = node;
     tc_enter_scope(tc);
 
+    MoveState *prev_move_state = tc->pctx->move_state;
+    tc->pctx->move_state = move_state_create(NULL);
+
     for (int i = 0; i < node->func.arg_count; i++)
     {
         if (node->func.param_names && node->func.param_names[i])
@@ -805,6 +808,9 @@ static void check_function(TypeChecker *tc, ASTNode *node)
             tc_error_with_hints(tc, node->token, msg, hints);
         }
     }
+
+    move_state_free(tc->pctx->move_state);
+    tc->pctx->move_state = prev_move_state;
 
     tc_exit_scope(tc);
     tc->current_func = NULL;
