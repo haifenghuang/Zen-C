@@ -322,7 +322,7 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    strcpy(g_config.cc, cc_arg);
+                    snprintf(g_config.cc, sizeof(g_config.cc), "%s", cc_arg);
                 }
             }
         }
@@ -336,8 +336,8 @@ int main(int argc, char **argv)
         else if (strncmp(arg, "-O", 2) == 0)
         {
             // Add to CFLAGS
-            strcat(g_config.gcc_flags, " ");
-            strcat(g_config.gcc_flags, arg);
+            size_t len = strlen(g_config.gcc_flags);
+            snprintf(g_config.gcc_flags + len, sizeof(g_config.gcc_flags) - len, " %s", arg);
         }
         else if (strcmp(arg, "-g") == 0)
         {
