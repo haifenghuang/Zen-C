@@ -3352,6 +3352,15 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         {
             if (lexer_peek(&lookahead).type != TOK_IDENT)
             {
+                if (nparams == 0 && lexer_peek(&lookahead).type == TOK_RPAREN)
+                {
+                    lexer_next(&lookahead);
+                    if (lexer_peek(&lookahead).type == TOK_ARROW)
+                    {
+                        lexer_next(&lookahead);
+                        is_lambda = 1;
+                    }
+                }
                 break;
             }
             params[nparams] = token_strdup(lexer_next(&lookahead));
@@ -3395,23 +3404,31 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             }
         }
 
-        if (is_lambda && nparams > 0)
+        if (is_lambda)
         {
             Lexer actual_parse = *l;
-            for (int i = 0; i < nparams; i++)
+            if (nparams > 0)
             {
-                lexer_next(&actual_parse);
-                if (lexer_peek(&actual_parse).type == TOK_COLON)
+                for (int i = 0; i < nparams; i++)
                 {
                     lexer_next(&actual_parse);
-                    param_types[i] = parse_type_formal(ctx, &actual_parse);
+                    if (lexer_peek(&actual_parse).type == TOK_COLON)
+                    {
+                        lexer_next(&actual_parse);
+                        param_types[i] = parse_type_formal(ctx, &actual_parse);
+                    }
+                    Token sep = lexer_next(&actual_parse);
+                    if (sep.type == TOK_RPAREN)
+                    {
+                        lexer_next(&actual_parse);
+                        break;
+                    }
                 }
-                Token sep = lexer_next(&actual_parse);
-                if (sep.type == TOK_RPAREN)
-                {
-                    lexer_next(&actual_parse);
-                    break;
-                }
+            }
+            else
+            {
+                lexer_next(&actual_parse); // consume ')'
+                lexer_next(&actual_parse); // consume '->'
             }
             *l = actual_parse;
 
