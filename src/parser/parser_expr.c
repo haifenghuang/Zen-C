@@ -3345,6 +3345,7 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
         Lexer lookahead = *l;
         int is_lambda = 0;
         char **params = xmalloc(sizeof(char *) * 16);
+        Type **param_types = xmalloc(sizeof(Type *) * 16);
         int nparams = 0;
 
         while (1)
@@ -3353,7 +3354,25 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
             {
                 break;
             }
-            params[nparams++] = token_strdup(lexer_next(&lookahead));
+            params[nparams] = token_strdup(lexer_next(&lookahead));
+            param_types[nparams] = NULL;
+            lookahead.pos = lookahead.pos;
+
+            if (lexer_peek(&lookahead).type == TOK_COLON)
+            {
+                lexer_next(&lookahead);
+                while (1)
+                {
+                    Token tk = lexer_peek(&lookahead);
+                    if (tk.type == TOK_EOF || tk.type == TOK_COMMA || tk.type == TOK_RPAREN)
+                    {
+                        break;
+                    }
+                    lexer_next(&lookahead);
+                }
+            }
+            nparams++;
+
             Token sep = lexer_peek(&lookahead);
             if (sep.type == TOK_COMMA)
             {
@@ -3378,15 +3397,43 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
         if (is_lambda && nparams > 0)
         {
-            *l = lookahead; // Commit
-            return parse_arrow_lambda_multi(ctx, l, params, nparams, 0);
+            Lexer actual_parse = *l;
+            for (int i = 0; i < nparams; i++)
+            {
+                lexer_next(&actual_parse);
+                if (lexer_peek(&actual_parse).type == TOK_COLON)
+                {
+                    lexer_next(&actual_parse);
+                    param_types[i] = parse_type_formal(ctx, &actual_parse);
+                }
+                Token sep = lexer_next(&actual_parse);
+                if (sep.type == TOK_RPAREN)
+                {
+                    lexer_next(&actual_parse);
+                    break;
+                }
+            }
+            *l = actual_parse;
+
+            ASTNode *node_multi = parse_arrow_lambda_multi(ctx, l, params, param_types, nparams, 0);
+            free(param_types);
+            return node_multi;
+        }
+        else
+        {
+            for (int i = 0; i < nparams; i++)
+            {
+                free(params[i]);
+            }
+            free(params);
+            free(param_types);
         }
 
         int saved = l->pos;
         if (lexer_peek(l).type == TOK_IDENT)
         {
             Lexer cast_look = *l;
-            lexer_next(&cast_look); // eat ident
+            lexer_next(&cast_look);
             while (lexer_peek(&cast_look).type == TOK_DCOLON)
             { // handle A::B
                 lexer_next(&cast_look);
@@ -3406,9 +3453,8 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
             if (lexer_peek(&cast_look).type == TOK_RPAREN)
             {
-                lexer_next(&cast_look); // eat )
+                lexer_next(&cast_look);
                 Token next = lexer_peek(&cast_look);
-                // Heuristic: It's a cast if followed by literal, ident, paren, or &/*
                 if (next.type == TOK_STRING || next.type == TOK_INT || next.type == TOK_FLOAT ||
                     (next.type == TOK_OP &&
                      (is_token(next, "&") || is_token(next, "*") || is_token(next, "!"))) ||
@@ -3430,15 +3476,14 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     node->cast.target_type = cast_type;
                     node->cast.expr = target;
                     node->type_info = cast_type_obj;
-                    return node; // Casts are usually unary, handled here.
+                    return node;
                 }
             }
         }
-        l->pos = saved; // Reset if not a cast
+        l->pos = saved;
 
         ASTNode *expr = parse_expression(ctx, l);
 
-        // Check for tuple literal: (expr, expr, ...)
         if (lexer_peek(l).type == TOK_COMMA)
         {
             // This is a tuple literal - collect all elements and infer types
@@ -3625,11 +3670,12 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
                         if (is_arrow)
                         {
-                            lexer_next(l);
-                            lexer_next(l);
+                            lexer_next(l); // consume '&'
+                            lexer_next(l); // consume ']'
 
-                            lexer_next(l);
+                            lexer_next(l); // consume '('
                             char **params = xmalloc(sizeof(char *) * 16);
+                            Type **param_types = xmalloc(sizeof(Type *) * 16);
                             int nparams = 0;
                             while (1)
                             {
@@ -3637,7 +3683,16 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                                 {
                                     break;
                                 }
-                                params[nparams++] = token_strdup(lexer_next(l));
+                                params[nparams] = token_strdup(lexer_next(l));
+                                param_types[nparams] = NULL;
+
+                                if (lexer_peek(l).type == TOK_COLON)
+                                {
+                                    lexer_next(l);
+                                    param_types[nparams] = parse_type_formal(ctx, l);
+                                }
+                                nparams++;
+
                                 Token sep = lexer_peek(l);
                                 if (sep.type == TOK_COMMA)
                                 {
@@ -3660,8 +3715,10 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                                 zpanic_at(t, "Expected ->");
                             }
 
-                            return parse_arrow_lambda_multi(ctx, l, params, nparams,
-                                                            default_capture_mode);
+                            ASTNode *node_multi = parse_arrow_lambda_multi(
+                                ctx, l, params, param_types, nparams, default_capture_mode);
+                            free(param_types);
+                            return node_multi;
                         }
                     }
                 }
@@ -6965,8 +7022,8 @@ ASTNode *parse_arrow_lambda_single(ParserContext *ctx, Lexer *l, char *param_nam
     return lambda;
 }
 
-ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names, int num_params,
-                                  int default_capture_mode)
+ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names,
+                                  Type **param_types, int num_params, int default_capture_mode)
 {
     ASTNode *lambda = ast_create(NODE_LAMBDA);
     lambda->lambda.param_names = param_names;
@@ -6982,8 +7039,16 @@ ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_nam
     lambda->lambda.param_types = xmalloc(sizeof(char *) * num_params);
     for (int i = 0; i < num_params; i++)
     {
-        lambda->lambda.param_types[i] = xstrdup("int");
-        t->args[i] = type_new(TYPE_INT);
+        if (param_types && param_types[i])
+        {
+            lambda->lambda.param_types[i] = type_to_string(param_types[i]);
+            t->args[i] = param_types[i];
+        }
+        else
+        {
+            lambda->lambda.param_types[i] = xstrdup("int");
+            t->args[i] = type_new(TYPE_INT);
+        }
     }
     lambda->type_info = t;
 

@@ -606,8 +606,8 @@ ASTNode *parse_arrow_lambda_single(ParserContext *ctx, Lexer *l, char *param_nam
 /**
  * @brief Parses a multi-parameter arrow lambda.
  */
-ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names, int num_params,
-                                  int default_capture_mode);
+ASTNode *parse_arrow_lambda_multi(ParserContext *ctx, Lexer *l, char **param_names,
+                                  Type **param_types, int num_params, int default_capture_mode);
 
 // Utils
 
