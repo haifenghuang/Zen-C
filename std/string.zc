@@ -165,6 +165,10 @@ impl String {
         return strcmp(self.c_str() + offset, suffix) == zero;
     }
     
+    fn reserve(self, cap: usize) {
+        self.vec.grow_to_fit(cap + 1);
+    }
+
     fn free(self) {
         self.vec.free();
     }
