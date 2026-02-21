@@ -245,48 +245,72 @@ void scan_build_directives(ParserContext *ctx, const char *src)
             char *colon = strchr(line, ':');
             if (colon)
             {
-                *colon = 0;
-                if (is_os_active(line))
+                *colon = 0; // split the string temporarily
+                if (0 == strcmp(line, "linux") || 0 == strcmp(line, "windows") ||
+                    0 == strcmp(line, "macos") || 0 == strcmp(line, "darwin"))
                 {
-                    directive = colon + 1;
-                    while (*directive == ' ')
+                    if (is_os_active(line))
                     {
-                        directive++;
+                        directive = colon + 1;
+                        while (*directive == ' ')
+                        {
+                            directive++;
+                        }
                     }
-                }
-                else if (0 == strcmp(line, "linux") || 0 == strcmp(line, "windows") ||
-                         0 == strcmp(line, "macos"))
-                {
-                    goto next_line;
+                    else
+                    {
+                        // OS specified but not active, skip this directive completely
+                        goto next_line;
+                    }
                 }
                 else
                 {
+                    // Not an OS prefix, restore the colon
                     *colon = ':';
                     directive = line;
                 }
             }
 
+            char *directive_val = NULL;
             // Process Directive
             if (0 == strncmp(directive, "link:", 5))
             {
+                directive_val = directive + 5;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 if (strlen(g_link_flags) > 0)
                 {
                     strcat(g_link_flags, " ");
                 }
-                strcat(g_link_flags, directive + 5);
+                strcat(g_link_flags, directive_val);
             }
             else if (0 == strncmp(directive, "cflags:", 7))
             {
+                directive_val = directive + 7;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 if (strlen(g_cflags) > 0)
                 {
                     strcat(g_cflags, " ");
                 }
-                strcat(g_cflags, directive + 7);
+                strcat(g_cflags, directive_val);
             }
             else if (0 == strncmp(directive, "include:", 8))
             {
+                directive_val = directive + 8;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 char flags[2048];
-                sprintf(flags, "-I%s", directive + 8);
+                sprintf(flags, "-I%s", directive_val);
                 if (strlen(g_cflags) > 0)
                 {
                     strcat(g_cflags, " ");
@@ -295,8 +319,14 @@ void scan_build_directives(ParserContext *ctx, const char *src)
             }
             else if (strncmp(directive, "lib:", 4) == 0)
             {
+                directive_val = directive + 4;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 char flags[2048];
-                sprintf(flags, "-L%s", directive + 4);
+                sprintf(flags, "-L%s", directive_val);
                 if (strlen(g_link_flags) > 0)
                 {
                     strcat(g_link_flags, " ");
@@ -305,8 +335,14 @@ void scan_build_directives(ParserContext *ctx, const char *src)
             }
             else if (strncmp(directive, "framework:", 10) == 0)
             {
+                directive_val = directive + 10;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 char flags[2048];
-                sprintf(flags, "-framework %s", directive + 10);
+                sprintf(flags, "-framework %s", directive_val);
                 if (strlen(g_link_flags) > 0)
                 {
                     strcat(g_link_flags, " ");
@@ -315,8 +351,14 @@ void scan_build_directives(ParserContext *ctx, const char *src)
             }
             else if (strncmp(directive, "define:", 7) == 0)
             {
+                directive_val = directive + 7;
+                while (*directive_val == ' ')
+                {
+                    directive_val++;
+                }
+
                 char flags[2048];
-                sprintf(flags, "-D%s", directive + 7);
+                sprintf(flags, "-D%s", directive_val);
                 if (strlen(g_cflags) > 0)
                 {
                     strcat(g_cflags, " ");
@@ -325,9 +367,15 @@ void scan_build_directives(ParserContext *ctx, const char *src)
             }
             else if (0 == strncmp(directive, "shell:", 6))
             {
-                if (system(directive + 6) != 0)
+                directive_val = directive + 6;
+                while (*directive_val == ' ')
                 {
-                    zwarn("Shell directive failed: %s", directive + 6);
+                    directive_val++;
+                }
+
+                if (system(directive_val) != 0)
+                {
+                    zwarn("Shell directive failed: %s", directive_val);
                 }
             }
             else if (strncmp(directive, "get:", 4) == 0)

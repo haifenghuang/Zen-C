@@ -44,4 +44,25 @@ void cmd_free(CmdBuilder *cmd);
  */
 const char *cmd_to_string(CmdBuilder *cmd);
 
+/**
+ * @brief Print compiler library search paths
+ */
+void print_search_paths();
+
+/**
+ * @brief Print compiler version
+ */
+void print_version();
+
+/**
+ * @brief Print compiler usage string
+ */
+void print_usage();
+
+/**
+ * @brief Build backend compiler invocation string
+ */
+void build_compile_command(char *cmd, size_t cmd_size, const char *outfile,
+                           const char *temp_source_file, const char *extra_c_sources);
+
 #endif
