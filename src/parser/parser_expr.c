@@ -4811,6 +4811,7 @@ ASTNode *parse_expr_prec(ParserContext *ctx, Lexer *l, Precedence min_prec)
 
         // Standard Unary Node (for primitives or if no overload found)
         lhs = ast_create(NODE_EXPR_UNARY);
+        lhs->token = t;
         lhs->unary.op = token_strdup(t);
         lhs->unary.operand = operand;
 

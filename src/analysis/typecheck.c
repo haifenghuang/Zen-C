@@ -120,6 +120,49 @@ static void check_node(TypeChecker *tc, ASTNode *node);
 static void check_expr_lambda(TypeChecker *tc, ASTNode *node);
 static int check_type_compatibility(TypeChecker *tc, Type *target, Type *value, Token t);
 
+static void check_move_for_rvalue(TypeChecker *tc, ASTNode *rvalue)
+{
+    if (!rvalue || !rvalue->type_info)
+    {
+        return;
+    }
+
+    if (is_type_copy(tc->pctx, rvalue->type_info))
+    {
+        return;
+    }
+
+    if (rvalue->type == NODE_EXPR_VAR)
+    {
+        ZenSymbol *sym = tc_lookup(tc, rvalue->var_ref.name);
+        if (sym)
+        {
+            mark_symbol_moved(tc->pctx, sym, rvalue);
+        }
+    }
+    else if (rvalue->type == NODE_EXPR_UNARY && strcmp(rvalue->unary.op, "*") == 0)
+    {
+        const char *hints[] = {"This type owns resources and cannot be implicitly copied",
+                               "Consider borrowing value via references or implementing Copy",
+                               NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of a borrowed reference", hints);
+        tc->error_count++;
+    }
+    else if (rvalue->type == NODE_EXPR_MEMBER)
+    {
+        const char *hints[] = {
+            "Cannot move a field out of a struct. Consider cloning or borrowing.", NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of a struct field", hints);
+        tc->error_count++;
+    }
+    else if (rvalue->type == NODE_EXPR_INDEX)
+    {
+        const char *hints[] = {"Cannot move an element out of an array or slice.", NULL};
+        zerror_with_hints(rvalue->token, "Cannot move out of an index expression", hints);
+        tc->error_count++;
+    }
+}
+
 static Type *resolve_alias(Type *t)
 {
     while (t && t->kind == TYPE_ALIAS && t->inner)
@@ -217,15 +260,8 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
             check_type_compatibility(tc, left_type, right_type, node->binary.right->token);
         }
 
-        // If RHS is a var, it might Move
-        if (node->binary.right->type == NODE_EXPR_VAR)
-        {
-            ZenSymbol *rhs_sym = tc_lookup(tc, node->binary.right->var_ref.name);
-            if (rhs_sym)
-            {
-                mark_symbol_moved(tc->pctx, rhs_sym, node);
-            }
-        }
+        // If RHS is moving a non-copy value, check validity and mark moved
+        check_move_for_rvalue(tc, node->binary.right);
 
         // LHS is being (re-)initialized, so it becomes Valid.
         if (node->binary.left->type == NODE_EXPR_VAR)
@@ -508,15 +544,8 @@ static void check_expr_call(TypeChecker *tc, ASTNode *node)
             }
         }
 
-        // If argument is passed by VALUE, and it's a variable, it MOVES.
-        if (arg->type == NODE_EXPR_VAR)
-        {
-            ZenSymbol *sym = tc_lookup(tc, arg->var_ref.name);
-            if (sym)
-            {
-                mark_symbol_moved(tc->pctx, sym, node);
-            }
-        }
+        // If argument is passed by VALUE, check if it can be moved.
+        check_move_for_rvalue(tc, arg);
 
         arg = arg->next;
         arg_idx++;
@@ -1405,15 +1434,8 @@ static void check_node(TypeChecker *tc, ASTNode *node)
         // Special case for Return to trigger move?
         if (node->type == NODE_RETURN && node->ret.value)
         {
-            // If returning a variable by value, it is moved.
-            if (node->ret.value->type == NODE_EXPR_VAR)
-            {
-                ZenSymbol *sym = tc_lookup(tc, node->ret.value->var_ref.name);
-                if (sym)
-                {
-                    mark_symbol_moved(tc->pctx, sym, node);
-                }
-            }
+            // If returning a value, check if it can be moved.
+            check_move_for_rvalue(tc, node->ret.value);
         }
         break;
     }
