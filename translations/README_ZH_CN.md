@@ -1044,6 +1044,32 @@ let re = regex! { ^[a-z]+$ };
 #define MAX_BUFFER 1024
 ```
 
+#### 条件编译
+使用 `@cfg()` 根据 `-D` 标志有条件地包含或排除任何顶层声明。
+
+```zc
+// 编译: zc build app.zc -DUSE_OPENGL
+
+@cfg(USE_OPENGL)
+import "opengl_backend.zc";
+
+@cfg(USE_VULKAN)
+import "vulkan_backend.zc";
+
+@cfg(not(USE_OPENGL))
+@cfg(not(USE_VULKAN))
+fn fallback_init() { println "未选择后端"; }
+```
+
+| 形式 | 含义 |
+|:---|:---|
+| `@cfg(NAME)` | 如果设置了 `-DNAME` 则包含 |
+| `@cfg(not(NAME))` | 如果未设置 `-DNAME` 则包含 |
+| `@cfg(any(A, B, ...))` | 如果任意条件为真则包含 (OR) |
+| `@cfg(all(A, B, ...))` | 如果所有条件为真则包含 (AND) |
+
+一个声明上的多个 `@cfg` 使用 AND 组合。`not()` 可以在 `any()` 和 `all()` 内部使用。适用于任何顶层声明：`fn`、`struct`、`import`、`impl`、`raw`、`def`、`test` 等。
+
 ### 13. 属性
 
 修饰函数和结构体以修改编译器行为。
@@ -1070,6 +1096,7 @@ let re = regex! { ^[a-z]+$ };
 | `@device` | 函数 | CUDA: 设备函数 (`__device__`)。 |
 | `@host` | 函数 | CUDA: 主机函数 (`__host__`)。 |
 | `@comptime` | 函数 | 用于编译时执行的辅助函数。 |
+| `@cfg(NAME)` | 任意 | 条件编译：仅在传递 `-DNAME` 时包含。支持 `not()`、`any()`、`all()`。 |
 | `@derive(...)` | 结构体 | 自动实现 Trait。支持 `Debug`, `Eq` (智能派生), `Copy`, `Clone`。 |
 | `@ctype("type")` | 函数参数 | 覆盖参数生成的 C 类型。 |
 | `@<custom>` | 任意 | 将泛型属性传递给 C (例如 `@flatten`, `@alias("name")`)。 |

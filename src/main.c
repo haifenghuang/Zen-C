@@ -245,6 +245,28 @@ int main(int argc, char **argv)
             size_t len = strlen(g_config.gcc_flags);
             snprintf(g_config.gcc_flags + len, sizeof(g_config.gcc_flags) - len, " -g");
         }
+        else if (strncmp(arg, "-D", 2) == 0)
+        {
+            const char *def = (strlen(arg) > 2) ? arg + 2 : NULL;
+            if (!def && i + 1 < argc)
+            {
+                i++;
+                def = argv[i];
+            }
+            if (def && g_config.cfg_define_count < 64)
+            {
+                char *name = xstrdup(def);
+                char *eq = strchr(name, '=');
+                if (eq)
+                {
+                    *eq = '\0';
+                }
+                g_config.cfg_defines[g_config.cfg_define_count++] = name;
+            }
+            size_t len = strlen(g_config.gcc_flags);
+            snprintf(g_config.gcc_flags + len, sizeof(g_config.gcc_flags) - len, " -D%s",
+                     def ? def : "");
+        }
         else if (arg[0] == '-')
         {
             // Unknown flag or C flag

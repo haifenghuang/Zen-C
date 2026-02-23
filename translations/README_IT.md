@@ -1081,6 +1081,32 @@ Passa delle macro del preprocessore C.
 #define BUFFER_MASSIMO 1024
 ```
 
+#### Compilazione Condizionale
+Usa `@cfg()` per includere o escludere condizionalmente qualsiasi dichiarazione di livello superiore in base ai flag `-D`.
+
+```zc
+// Compila con: zc build app.zc -DUSE_OPENGL
+
+@cfg(USE_OPENGL)
+import "opengl_backend.zc";
+
+@cfg(USE_VULKAN)
+import "vulkan_backend.zc";
+
+@cfg(not(USE_OPENGL))
+@cfg(not(USE_VULKAN))
+fn fallback_init() { println "Nessun backend selezionato"; }
+```
+
+| Forma | Significato |
+|:---|:---|
+| `@cfg(NAME)` | Includi se `-DNAME` è definito |
+| `@cfg(not(NAME))` | Includi se `-DNAME` NON è definito |
+| `@cfg(any(A, B, ...))` | Includi se QUALSIASI condizione è vera (OR) |
+| `@cfg(all(A, B, ...))` | Includi se TUTTE le condizioni sono vere (AND) |
+
+Più `@cfg` su una dichiarazione vengono combinati con AND. `not()` può essere usato dentro `any()` e `all()`. Funziona con qualsiasi dichiarazione di livello superiore: `fn`, `struct`, `import`, `impl`, `raw`, `def`, `test`, ecc.
+
 ### 13. Attributi
 
 Decora le funzioni e gli struct per modificare il comportamento del compilatore.
@@ -1107,6 +1133,7 @@ Decora le funzioni e gli struct per modificare il comportamento del compilatore.
 | `@device` | Fn | CUDA: Funzione del Device (`__device__`). |
 | `@host` | Fn | CUDA: Funzione dell'Host (`__host__`). |
 | `@comptime` | Fn | Funzione di supporto disponibile per l'esecuzione al tempo di compilazione. |
+| `@cfg(NAME)` | Qualsiasi | Compilazione condizionale: includi solo se viene passato `-DNAME`. Supporta `not()`, `any()`, `all()`. |
 | `@derive(...)` | Struct | Implementa automaticamente i tratti. Supporta `Debug`, `Eq` (Derivazione Intelligente), `Copy`, `Clone`. |
 | `@<custom>` | Any | Passa gli attributi generici direttamente al C (e.g. `@flatten`, `@alias("nome")`) |
 

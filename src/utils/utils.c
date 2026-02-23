@@ -364,6 +364,17 @@ void scan_build_directives(ParserContext *ctx, const char *src)
                     strcat(g_cflags, " ");
                 }
                 strcat(g_cflags, flags);
+
+                if (g_config.cfg_define_count < 64)
+                {
+                    char *name = xstrdup(directive_val);
+                    char *eq = strchr(name, '=');
+                    if (eq)
+                    {
+                        *eq = '\0';
+                    }
+                    g_config.cfg_defines[g_config.cfg_define_count++] = name;
+                }
             }
             else if (0 == strncmp(directive, "shell:", 6))
             {

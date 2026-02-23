@@ -1,0 +1,36 @@
+// Test @cfg() combinators: any(), all(), not()
+// Run with: ./zc run tests/compiler/interop/test_cfg_combinators.zc -DFEATURE_A -DFEATURE_C
+
+// any() — include if ANY match
+@cfg(any(FEATURE_A, FEATURE_B))
+fn has_feature() -> bool { return true; }
+
+@cfg(not(FEATURE_A))
+@cfg(not(FEATURE_B))
+fn has_feature() -> bool { return false; }
+
+// all() — include if ALL match
+@cfg(all(FEATURE_A, FEATURE_C))
+fn has_both_ac() -> bool { return true; }
+
+@cfg(any(not(FEATURE_A), not(FEATURE_C)))
+fn has_both_ac() -> bool { return false; }
+
+// not() inside any()
+@cfg(any(not(FEATURE_B), FEATURE_Z))
+fn not_b_or_z() -> bool { return true; }
+
+fn main() {
+    // FEATURE_A and FEATURE_C are defined, FEATURE_B is not
+
+    // any(A, B) -> true because A is defined
+    assert(has_feature() == true, "any(A, B) should be true");
+
+    // all(A, C) -> true because both are defined
+    assert(has_both_ac() == true, "all(A, C) should be true");
+
+    // any(not(B), Z) -> true because B is NOT defined
+    assert(not_b_or_z() == true, "any(not(B), Z) should be true");
+
+    println "All combinator tests passed!";
+}

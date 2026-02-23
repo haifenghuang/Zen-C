@@ -1093,6 +1093,37 @@ Pass preprocessor macros through to C.
 #define MAX_BUFFER 1024
 ```
 
+#### Conditional Compilation
+Use `@cfg()` to conditionally include or exclude any top-level declaration based on `-D` flags.
+
+```zc
+// Build with: zc build app.zc -DUSE_OPENGL
+
+@cfg(USE_OPENGL)
+import "opengl_backend.zc";
+
+@cfg(USE_VULKAN)
+import "vulkan_backend.zc";
+
+// OR: include if any backend is selected
+@cfg(any(USE_OPENGL, USE_VULKAN))
+fn init_graphics() { /* ... */ }
+
+// AND with negation
+@cfg(not(USE_OPENGL))
+@cfg(not(USE_VULKAN))
+fn fallback_init() { println "No backend selected"; }
+```
+
+| Form | Meaning |
+|:---|:---|
+| `@cfg(NAME)` | Include if `-DNAME` is set |
+| `@cfg(not(NAME))` | Include if `-DNAME` is NOT set |
+| `@cfg(any(A, B, ...))` | Include if ANY condition is true (OR) |
+| `@cfg(all(A, B, ...))` | Include if ALL conditions are true (AND) |
+
+Multiple `@cfg` on one declaration are ANDed. `not()` can be used inside `any()` and `all()`. Works on any top-level declaration: `fn`, `struct`, `import`, `impl`, `raw`, `def`, `test`, etc.
+
 ### 13. Attributes
 
 Decorate functions and structs to modify compiler behavior.
@@ -1119,6 +1150,7 @@ Decorate functions and structs to modify compiler behavior.
 | `@device` | Fn | CUDA: Device function (`__device__`). |
 | `@host` | Fn | CUDA: Host function (`__host__`). |
 | `@comptime` | Fn | Helper function available for compile-time execution. |
+| `@cfg(NAME)` | Any | Conditional compilation: include only if `-DNAME` is passed. Supports `not()`, `any()`, `all()`. |
 | `@derive(...)` | Struct | Auto-implement traits. Supports `Debug`, `Eq` (Smart Derive), `Copy`, `Clone`. |
 | `@ctype("type")` | Fn Param | Overrides generated C type for a parameter. |
 | `@<custom>` | Any | Passes generic attributes to C (e.g. `@flatten`, `@alias("name")`). |

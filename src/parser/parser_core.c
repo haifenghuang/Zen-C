@@ -5,6 +5,68 @@
 
 static ASTNode *generate_derive_impls(ParserContext *ctx, ASTNode *strct, char **traits, int count);
 
+static int is_cfg_defined(const char *name)
+{
+    for (int i = 0; i < g_config.cfg_define_count; i++)
+    {
+        if (strcmp(g_config.cfg_defines[i], name) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void skip_top_level_decl(Lexer *l)
+{
+    Token t = lexer_peek(l);
+
+    if (t.type == TOK_PREPROC)
+    {
+        lexer_next(l);
+        return;
+    }
+
+    int found_brace = 0;
+    while (1)
+    {
+        t = lexer_peek(l);
+        if (t.type == TOK_EOF)
+        {
+            return;
+        }
+        if (t.type == TOK_SEMICOLON && !found_brace)
+        {
+            lexer_next(l);
+            return;
+        }
+        if (t.type == TOK_LBRACE)
+        {
+            found_brace = 1;
+            lexer_next(l);
+            int depth = 1;
+            while (depth > 0)
+            {
+                Token inner = lexer_next(l);
+                if (inner.type == TOK_EOF)
+                {
+                    return;
+                }
+                if (inner.type == TOK_LBRACE)
+                {
+                    depth++;
+                }
+                if (inner.type == TOK_RBRACE)
+                {
+                    depth--;
+                }
+            }
+            return;
+        }
+        lexer_next(l);
+    }
+}
+
 // Main parsing entry point
 ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
 {
@@ -91,6 +153,7 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
         int attr_cuda_global = 0; // @global -> __global__
         int attr_cuda_device = 0; // @device -> __device__
         int attr_cuda_host = 0;   // @host -> __host__
+        int cfg_skip = 0;         // @cfg() conditional compilation
         char *deprecated_msg = NULL;
         char *attr_section = NULL;
 
@@ -225,6 +288,182 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
                     zpanic_at(lexer_peek(l), "@align requires a value: @align(N)");
                 }
             }
+            else if (0 == strncmp(attr.start, "cfg", 3) && 3 == attr.len)
+            {
+                if (lexer_peek(l).type == TOK_LPAREN)
+                {
+                    lexer_next(l);
+                    Token cfg_tok = lexer_next(l);
+                    if (cfg_tok.type == TOK_IDENT && cfg_tok.len == 3 &&
+                        strncmp(cfg_tok.start, "not", 3) == 0)
+                    {
+                        if (lexer_peek(l).type != TOK_LPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ( after not in @cfg(not(...))");
+                        }
+                        lexer_next(l);
+                        Token name_tok = lexer_next(l);
+                        if (name_tok.type != TOK_IDENT)
+                        {
+                            zpanic_at(name_tok, "Expected define name in @cfg(not(NAME))");
+                        }
+                        char *cfg_name = token_strdup(name_tok);
+                        if (is_cfg_defined(cfg_name))
+                        {
+                            cfg_skip = 1;
+                        }
+                        if (lexer_next(l).type != TOK_RPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ) after name in @cfg(not(NAME))");
+                        }
+                    }
+                    else if (cfg_tok.type == TOK_IDENT && cfg_tok.len == 3 &&
+                             strncmp(cfg_tok.start, "any", 3) == 0)
+                    {
+                        if (lexer_peek(l).type != TOK_LPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ( after any in @cfg(any(...))");
+                        }
+                        lexer_next(l);
+                        int any_match = 0;
+                        while (1)
+                        {
+                            Token t = lexer_next(l);
+                            if (t.type == TOK_IDENT && t.len == 3 &&
+                                strncmp(t.start, "not", 3) == 0)
+                            {
+                                if (lexer_next(l).type != TOK_LPAREN)
+                                {
+                                    zpanic_at(lexer_peek(l), "Expected ( after not");
+                                }
+                                Token nt = lexer_next(l);
+                                if (nt.type != TOK_IDENT)
+                                {
+                                    zpanic_at(nt, "Expected define name");
+                                }
+                                if (!is_cfg_defined(token_strdup(nt)))
+                                {
+                                    any_match = 1;
+                                }
+                                if (lexer_next(l).type != TOK_RPAREN)
+                                {
+                                    zpanic_at(lexer_peek(l), "Expected )");
+                                }
+                            }
+                            else if (t.type == TOK_IDENT)
+                            {
+                                if (is_cfg_defined(token_strdup(t)))
+                                {
+                                    any_match = 1;
+                                }
+                            }
+                            else
+                            {
+                                zpanic_at(t, "Expected define name in @cfg(any(...))");
+                            }
+                            if (lexer_peek(l).type == TOK_COMMA)
+                            {
+                                lexer_next(l);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        if (lexer_next(l).type != TOK_RPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ) after any(...)");
+                        }
+                        if (!any_match)
+                        {
+                            cfg_skip = 1;
+                        }
+                    }
+                    else if (cfg_tok.type == TOK_IDENT && cfg_tok.len == 3 &&
+                             strncmp(cfg_tok.start, "all", 3) == 0)
+                    {
+                        if (lexer_peek(l).type != TOK_LPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ( after all in @cfg(all(...))");
+                        }
+                        lexer_next(l);
+                        int all_match = 1;
+                        while (1)
+                        {
+                            Token t = lexer_next(l);
+                            if (t.type == TOK_IDENT && t.len == 3 &&
+                                strncmp(t.start, "not", 3) == 0)
+                            {
+                                if (lexer_next(l).type != TOK_LPAREN)
+                                {
+                                    zpanic_at(lexer_peek(l), "Expected ( after not");
+                                }
+                                Token nt = lexer_next(l);
+                                if (nt.type != TOK_IDENT)
+                                {
+                                    zpanic_at(nt, "Expected define name");
+                                }
+                                if (is_cfg_defined(token_strdup(nt)))
+                                {
+                                    all_match = 0;
+                                }
+                                if (lexer_next(l).type != TOK_RPAREN)
+                                {
+                                    zpanic_at(lexer_peek(l), "Expected )");
+                                }
+                            }
+                            else if (t.type == TOK_IDENT)
+                            {
+                                if (!is_cfg_defined(token_strdup(t)))
+                                {
+                                    all_match = 0;
+                                }
+                            }
+                            else
+                            {
+                                zpanic_at(t, "Expected define name in @cfg(all(...))");
+                            }
+                            if (lexer_peek(l).type == TOK_COMMA)
+                            {
+                                lexer_next(l);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        if (lexer_next(l).type != TOK_RPAREN)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected ) after all(...)");
+                        }
+                        if (!all_match)
+                        {
+                            cfg_skip = 1;
+                        }
+                    }
+                    else if (cfg_tok.type == TOK_IDENT)
+                    {
+                        // @cfg(NAME)
+                        char *cfg_name = token_strdup(cfg_tok);
+                        if (!is_cfg_defined(cfg_name))
+                        {
+                            cfg_skip = 1; // Not defined — skip
+                        }
+                    }
+                    else
+                    {
+                        zpanic_at(cfg_tok, "Expected define name in @cfg(NAME)");
+                    }
+                    if (lexer_next(l).type != TOK_RPAREN)
+                    {
+                        zpanic_at(lexer_peek(l), "Expected ) after @cfg(...)");
+                    }
+                }
+                else
+                {
+                    zpanic_at(lexer_peek(l), "@cfg requires a condition: @cfg(NAME)");
+                }
+            }
             else if (0 == strncmp(attr.start, "derive", 6) && 6 == attr.len)
             {
                 if (lexer_peek(l).type == TOK_LPAREN)
@@ -324,6 +563,12 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
             }
 
             t = lexer_peek(l);
+        }
+
+        if (cfg_skip)
+        {
+            skip_top_level_decl(l);
+            continue;
         }
 
         if (t.type == TOK_PREPROC)

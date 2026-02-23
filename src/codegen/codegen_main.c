@@ -341,8 +341,6 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
     if (node->type == NODE_ROOT)
     {
         ASTNode *kids = node->root.children;
-        // Recursive Unwrap of Nested Roots (if accidentally wrapped multiple
-        // times).
         while (kids && kids->type == NODE_ROOT)
         {
             kids = kids->root.children;
@@ -355,9 +353,15 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
             emit_preamble(ctx, out);
             fflush(out);
         }
+
+        for (int i = 0; i < g_config.cfg_define_count; i++)
+        {
+            fprintf(out, "#ifndef %s\n#define %s 1\n#endif\n", g_config.cfg_defines[i],
+                    g_config.cfg_defines[i]);
+        }
+
         emit_includes_and_aliases(kids, out);
 
-        // Emit Hoisted Code (from plugins)
         if (ctx->hoist_out)
         {
             long pos = ftell(ctx->hoist_out);
