@@ -793,7 +793,15 @@ void codegen_node(ParserContext *ctx, ASTNode *node, FILE *out)
                     continue;
                 }
             }
+            if (iter->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", iter->cfg_condition);
+            }
             codegen_node_single(ctx, iter, out);
+            if (iter->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
             iter = iter->next;
         }
 

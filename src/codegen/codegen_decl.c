@@ -249,8 +249,16 @@ void emit_type_aliases(ASTNode *node, FILE *out)
     {
         if (node->type == NODE_TYPE_ALIAS)
         {
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
             fprintf(out, "typedef %s %s;\n", node->type_alias.original_type,
                     node->type_alias.alias);
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
         }
         node = node->next;
     }
@@ -273,6 +281,10 @@ void emit_enum_protos(ASTNode *node, FILE *out)
     {
         if (node->type == NODE_ENUM && !node->enm.is_template)
         {
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
             ASTNode *v = node->enm.variants;
             while (v)
             {
@@ -288,6 +300,10 @@ void emit_enum_protos(ASTNode *node, FILE *out)
                     fprintf(out, "%s %s_%s();\n", node->enm.name, node->enm.name, v->variant.name);
                 }
                 v = v->next;
+            }
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
             }
         }
         node = node->next;
@@ -418,6 +434,10 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                 continue;
             }
 
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
             if (node->strct.is_union)
             {
                 fprintf(out, "union %s {", node->strct.name);
@@ -487,9 +507,17 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
             }
 
             fprintf(out, ";\n\n");
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
         }
         else if (node->type == NODE_ENUM)
         {
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
             fprintf(out, "typedef enum { ");
             ASTNode *v = node->enm.variants;
             while (v)
@@ -532,6 +560,10 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
                 }
                 v = v->next;
             }
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
         }
         node = node->next;
     }
@@ -570,6 +602,10 @@ void emit_trait_defs(ASTNode *node, FILE *out)
             {
                 node = node->next;
                 continue;
+            }
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
             }
             fprintf(out, "typedef struct %s_VTable {\n", node->trait.name);
             ASTNode *m = node->trait.methods;
@@ -681,6 +717,10 @@ void emit_trait_defs(ASTNode *node, FILE *out)
 
                 m = m->next;
             }
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
             fprintf(out, "\n");
         }
         node = node->next;
@@ -694,6 +734,10 @@ void emit_globals(ParserContext *ctx, ASTNode *node, FILE *out)
     {
         if (node->type == NODE_VAR_DECL || node->type == NODE_CONST)
         {
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", node->cfg_condition);
+            }
             if (node->type == NODE_CONST)
             {
                 fprintf(out, "const ");
@@ -726,6 +770,10 @@ void emit_globals(ParserContext *ctx, ASTNode *node, FILE *out)
                 codegen_expression(ctx, node->var_decl.init_expr, out);
             }
             fprintf(out, ";\n");
+            if (node->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
+            }
         }
         node = node->next;
     }
@@ -739,6 +787,10 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
     {
         if (f->type == NODE_FUNCTION)
         {
+            if (f->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", f->cfg_condition);
+            }
             if (f->func.is_async)
             {
                 fprintf(out, "Async %s(%s);\n", f->func.name, f->func.args);
@@ -757,6 +809,10 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
             {
                 emit_func_signature(ctx, out, f, NULL);
                 fprintf(out, ";\n");
+            }
+            if (f->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
             }
         }
         else if (f->type == NODE_IMPL)
@@ -806,6 +862,10 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
                 continue;
             }
 
+            if (f->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", f->cfg_condition);
+            }
             ASTNode *m = f->impl.methods;
             while (m)
             {
@@ -839,6 +899,10 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
 
                 free(proto);
                 m = m->next;
+            }
+            if (f->cfg_condition)
+            {
+                fprintf(out, "#endif\n");
             }
         }
         else if (f->type == NODE_IMPL_TRAIT)
@@ -884,6 +948,10 @@ void emit_protos(ParserContext *ctx, ASTNode *node, FILE *out)
                 continue;
             }
 
+            if (f->cfg_condition)
+            {
+                fprintf(out, "#if %s\n", f->cfg_condition);
+            }
             ASTNode *m = f->impl_trait.methods;
             while (m)
             {

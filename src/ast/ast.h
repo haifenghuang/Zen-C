@@ -200,6 +200,7 @@ struct ASTNode
     Token token;
     Token definition_token; // For LSP: Location where the symbol used in this
                             // node was defined.
+    char *cfg_condition;    // C preprocessor condition from @cfg
 
     union
     {
