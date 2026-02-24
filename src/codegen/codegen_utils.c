@@ -515,6 +515,24 @@ char *infer_type(ParserContext *ctx, ASTNode *node)
                 buf[len] = 0;
                 return buf;
             }
+
+            if (strncmp(array_type, "Slice_", 6) == 0)
+            {
+                return xstrdup(array_type + 6);
+            }
+
+            char *search_name = array_type;
+            if (strncmp(search_name, "struct ", 7) == 0)
+            {
+                search_name += 7;
+            }
+
+            ASTNode *def = find_struct_def_codegen(ctx, search_name);
+            if (def && def->type_info && def->type_info->kind == TYPE_VECTOR &&
+                def->type_info->inner)
+            {
+                return type_to_string(def->type_info->inner);
+            }
         }
         return "int";
     }

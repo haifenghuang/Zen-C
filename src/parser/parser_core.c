@@ -94,6 +94,7 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
         char *cfg_condition = NULL; // @cfg() conditional compilation
         char *deprecated_msg = NULL;
         char *attr_section = NULL;
+        int attr_vector_size = 0;
 
         char *derived_traits[32];
         int derived_count = 0;
@@ -200,6 +201,24 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
                 else
                 {
                     zpanic_at(lexer_peek(l), "@section requires a name: @section(\"name\")");
+                }
+            }
+            else if (0 == strncmp(attr.start, "vector", 6) && 6 == attr.len)
+            {
+                if (lexer_peek(l).type == TOK_LPAREN)
+                {
+                    lexer_next(l);
+                    Token num = lexer_next(l);
+                    if (num.type == TOK_INT)
+                    {
+                        char *tmp = token_strdup(num);
+                        attr_vector_size = atoi(tmp);
+                        free(tmp);
+                    }
+                    if (lexer_next(l).type != TOK_RPAREN)
+                    {
+                        zpanic_at(lexer_peek(l), "Expected ) after vector size");
+                    }
                 }
             }
             else if (0 == strncmp(attr.start, "packed", 6) && 6 == attr.len)
@@ -632,6 +651,13 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
                 {
                     s->strct.is_packed = attr_packed;
                     s->strct.align = attr_align;
+                    s->strct.attributes = current_custom_attributes;
+
+                    if (attr_vector_size > 0)
+                    {
+                        s->type_info->kind = TYPE_VECTOR;
+                        s->type_info->array_size = attr_vector_size;
+                    }
 
                     if (derived_count > 0)
                     {
@@ -817,10 +843,6 @@ ASTNode *parse_program_nodes(ParserContext *ctx, Lexer *l)
             if (0 == strncmp(next.start, "fn", 2) && 2 == next.len)
             {
                 s = parse_function(ctx, l, 1);
-                if (s)
-                {
-                    s->func.is_async = 1;
-                }
             }
             else
             {

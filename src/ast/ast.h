@@ -68,6 +68,7 @@ typedef enum
     TYPE_ENUM,     ///< Enum type.
     TYPE_POINTER,  ///< Pointer type (*).
     TYPE_ARRAY,    ///< Fixed size array [N].
+    TYPE_VECTOR,   ///< SIMD vector type.
     TYPE_FUNCTION, ///< Function pointer or reference.
     TYPE_GENERIC,  ///< Generic type parameter (T).
     TYPE_ALIAS,    ///< Opaque type alias.
@@ -674,6 +675,7 @@ void ast_free(ASTNode *node);
 Type *type_new(TypeKind kind);
 Type *type_new_ptr(Type *inner);
 Type *type_new_array(Type *inner, int size);
+Type *type_new_vector(Type *inner, int size);
 int type_eq(Type *a, Type *b);
 int is_integer_type(Type *t);
 int is_float_type(Type *t);

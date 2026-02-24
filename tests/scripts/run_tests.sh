@@ -66,6 +66,10 @@ while read -r test_file; do
             echo "Skipping $test_file (Constructor attribute not supported by TCC)"
             continue
         fi
+        if [[ "$test_file" == *"test_simd_native.zc"* ]]; then
+            echo "Skipping $test_file (SIMD vector extensions not supported by TCC)"
+            continue
+        fi
     fi
 
     # Skip tests that require typechecking if not enabled

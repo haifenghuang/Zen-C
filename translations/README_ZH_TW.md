@@ -343,6 +343,20 @@ union Data {
 }
 ```
 
+#### SIMD 向量
+使用 GCC/Clang 向量擴展的原生 SIMD 向量類型。使用 `@vector(N)` 註解一個結構體來定義包含 N 個元素的向量。
+```zc
+import "std/simd.zc";
+
+fn main() {
+    let a = f32x4{v: 1.0};              // 廣播: {1.0, 1.0, 1.0, 1.0}
+    let b = f32x4{1.0, 2.0, 3.0, 4.0};  // 逐元素初始化
+    let c = a + b;                       // 逐元素加法
+    let x = c[0];                        // 元素存取 (float)
+}
+```
+算術運算符（`+`, `-`, `*`, `/`）和位元運算符（`&`, `|`, `^`）逐元素運算。預定義類型請參閱 [`std/simd.zc`](../std/simd.zc)。
+
 #### 類型別名
 為現有類型創建新名稱。
 ```zc
@@ -1322,6 +1336,7 @@ Zen C 包含一個涵蓋基本功能的標準庫 (`std`)。
 | **`std/set.zc`** | 泛型哈希集合 `Set<T>`。 | [文檔](../docs/std/set.md) |
 | **`std/process.zc`** | 進程執行與管理。 | [文檔](../docs/std/process.md) |
 | **`std/regex.zc`** | 正則表達式 (基於 TRE)。 | [文檔](../docs/std/regex.md) |
+| **`std/simd.zc`** | 原生 SIMD 向量類型。 | [文檔](../docs/std/simd.md) |
 
 </details>
 

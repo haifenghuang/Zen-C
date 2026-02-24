@@ -350,8 +350,10 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
                 return;
             }
 
-            int left_numeric = is_integer_type(left_type) || is_float_type(left_type);
-            int right_numeric = is_integer_type(right_type) || is_float_type(right_type);
+            int left_numeric = is_integer_type(left_type) || is_float_type(left_type) ||
+                               left_type->kind == TYPE_VECTOR;
+            int right_numeric = is_integer_type(right_type) || is_float_type(right_type) ||
+                                right_type->kind == TYPE_VECTOR;
 
             if (!left_numeric || !right_numeric)
             {
@@ -364,8 +366,19 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
                 char msg[256];
                 snprintf(msg, sizeof(msg), "Operator '%s' requires numeric operands", op);
                 const char *hints[] = {
-                    "Arithmetic operators can only be used with integer or float types", NULL};
+                    "Arithmetic operators can only be used with integer, float, or vector types",
+                    NULL};
                 tc_error_with_hints(tc, node->token, msg, hints);
+            }
+            else if (left_type->kind == TYPE_VECTOR || right_type->kind == TYPE_VECTOR)
+            {
+                if (left_type->kind != right_type->kind || !type_eq(left_type, right_type))
+                {
+                    tc_error(tc, node->token,
+                             "Vector operation requires operands of same vector type");
+                }
+                node->type_info = left_type;
+                return;
             }
             else
             {
@@ -448,12 +461,23 @@ static void check_expr_binary(TypeChecker *tc, ASTNode *node)
 
         if (left_type && right_type)
         {
-            if (!is_integer_type(left_type) || !is_integer_type(right_type))
+            if ((!is_integer_type(left_type) && left_type->kind != TYPE_VECTOR) ||
+                (!is_integer_type(right_type) && right_type->kind != TYPE_VECTOR))
             {
                 char msg[256];
-                snprintf(msg, sizeof(msg), "Bitwise operator '%s' requires integer operands", op);
-                const char *hints[] = {"Bitwise operators only work on integer types", NULL};
+                snprintf(msg, sizeof(msg),
+                         "Bitwise operator '%s' requires integer or vector operands", op);
+                const char *hints[] = {"Bitwise operators only work on integer or vector types",
+                                       NULL};
                 tc_error_with_hints(tc, node->token, msg, hints);
+            }
+            else if (left_type->kind == TYPE_VECTOR || right_type->kind == TYPE_VECTOR)
+            {
+                if (left_type->kind != right_type->kind || !type_eq(left_type, right_type))
+                {
+                    tc_error(tc, node->token, "Vector bitwise operation requires same vector type");
+                }
+                node->type_info = left_type;
             }
             else
             {
@@ -796,6 +820,7 @@ static void check_var_decl(TypeChecker *tc, ASTNode *node)
     if (!t && node->var_decl.init_expr)
     {
         t = node->var_decl.init_expr->type_info;
+        node->type_info = t;
     }
 
     tc_add_symbol(tc, node->var_decl.name, t, node->token);
@@ -1035,6 +1060,8 @@ static void check_struct_init(TypeChecker *tc, ASTNode *node)
 
         field_init = field_init->next;
     }
+
+    node->type_info = def->type_info;
 }
 
 static void check_node(TypeChecker *tc, ASTNode *node)
@@ -1279,6 +1306,18 @@ static void check_node(TypeChecker *tc, ASTNode *node)
                     check_expr_call(tc, node);
                     break;
                 }
+            }
+            if (t->kind == TYPE_ARRAY || t->kind == TYPE_POINTER || t->kind == TYPE_VECTOR)
+            {
+                if (t->kind == TYPE_VECTOR && !t->inner && t->name)
+                {
+                    ASTNode *def = find_struct_def(tc->pctx, t->name);
+                    if (def && def->type == NODE_STRUCT && def->strct.fields)
+                    {
+                        t->inner = def->strct.fields->type_info;
+                    }
+                }
+                node->type_info = t->inner;
             }
         }
 

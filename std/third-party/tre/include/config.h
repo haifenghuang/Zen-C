@@ -8,7 +8,7 @@
 #define HAVE_MALLOC_H 1
 
 /* Define if the GNU dcgettext() function is already present or preinstalled.
-   */
+ */
 /* #undef HAVE_DCGETTEXT */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
@@ -186,6 +186,6 @@
 /* Avoid silly warnings about "insecure" functions. */
 #define _CRT_SECURE_NO_DEPRECATE 1
 
-/* #if (!defined _MSC_VER) || (_MSC_VER < 1900) 
-	#define snprintf sprintf_s
+/* #if (!defined _MSC_VER) || (_MSC_VER < 1900)
+    #define snprintf sprintf_s
 #endif */

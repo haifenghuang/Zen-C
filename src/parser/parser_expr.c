@@ -2453,6 +2453,17 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                     is_struct_init = 1;
                 }
             }
+            else
+            {
+                // Vector positional init: e.g. f32x4{1.0, 2.0, 3.0, 4.0}
+                // First token is not an ident (it's a literal/expr), check if this is a vector type
+                ASTNode *vec_def = find_struct_def(ctx, acc);
+                if (vec_def && vec_def->type == NODE_STRUCT && vec_def->type_info &&
+                    vec_def->type_info->kind == TYPE_VECTOR)
+                {
+                    is_struct_init = 1;
+                }
+            }
             if (is_struct_init)
             {
                 // Special case for primitive types (e.g. i32{})
@@ -2561,37 +2572,94 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
 
                 ASTNode *head = NULL, *tail = NULL;
                 int first = 1;
-                while (lexer_peek(l).type != TOK_RBRACE)
+
+                // Check if this is a vector type for positional init
+                int is_vector_init = 0;
+                if (def && def->type == NODE_STRUCT && def->type_info &&
+                    def->type_info->kind == TYPE_VECTOR)
                 {
-                    if (!first && lexer_peek(l).type == TOK_COMMA)
+                    // Peek ahead: if first value is not followed by ':',
+                    // this is positional vector init like f32x4{1.0, 2.0, 3.0, 4.0}
+                    Lexer saved = *l;
+                    Token first_tok = lexer_next(l);
+                    if (first_tok.type != TOK_RBRACE)
                     {
-                        lexer_next(l);
+                        Token maybe_colon = lexer_peek(l);
+                        if (maybe_colon.type != TOK_COLON)
+                        {
+                            is_vector_init = 1;
+                        }
                     }
-                    if (lexer_peek(l).type == TOK_RBRACE)
-                    {
-                        break;
-                    }
-                    Token fn = lexer_next(l);
-                    if (lexer_next(l).type != TOK_COLON)
-                    {
-                        zpanic_at(lexer_peek(l), "Expected :");
-                    }
-                    ASTNode *val = parse_expression(ctx, l);
-                    ASTNode *assign = ast_create(NODE_VAR_DECL);
-                    assign->var_decl.name = token_strdup(fn);
-                    assign->var_decl.init_expr = val;
-                    if (!head)
-                    {
-                        head = assign;
-                    }
-                    else
-                    {
-                        tail->next = assign;
-                    }
-                    tail = assign;
-                    first = 0;
+                    *l = saved; // restore lexer state
                 }
-                lexer_next(l);
+
+                if (is_vector_init)
+                {
+                    // Parse positional values: f32x4{1.0, 2.0, 3.0, 4.0}
+                    int idx = 0;
+                    while (lexer_peek(l).type != TOK_RBRACE)
+                    {
+                        if (idx > 0 && lexer_peek(l).type == TOK_COMMA)
+                        {
+                            lexer_next(l);
+                        }
+                        if (lexer_peek(l).type == TOK_RBRACE)
+                        {
+                            break;
+                        }
+                        ASTNode *val = parse_expression(ctx, l);
+                        ASTNode *assign = ast_create(NODE_VAR_DECL);
+                        char name[16];
+                        snprintf(name, sizeof(name), "_v%d", idx);
+                        assign->var_decl.name = xstrdup(name);
+                        assign->var_decl.init_expr = val;
+                        if (!head)
+                        {
+                            head = assign;
+                        }
+                        else
+                        {
+                            tail->next = assign;
+                        }
+                        tail = assign;
+                        idx++;
+                    }
+                    lexer_next(l); // eat '}'
+                }
+                else
+                {
+                    while (lexer_peek(l).type != TOK_RBRACE)
+                    {
+                        if (!first && lexer_peek(l).type == TOK_COMMA)
+                        {
+                            lexer_next(l);
+                        }
+                        if (lexer_peek(l).type == TOK_RBRACE)
+                        {
+                            break;
+                        }
+                        Token fn = lexer_next(l);
+                        if (lexer_next(l).type != TOK_COLON)
+                        {
+                            zpanic_at(lexer_peek(l), "Expected :");
+                        }
+                        ASTNode *val = parse_expression(ctx, l);
+                        ASTNode *assign = ast_create(NODE_VAR_DECL);
+                        assign->var_decl.name = token_strdup(fn);
+                        assign->var_decl.init_expr = val;
+                        if (!head)
+                        {
+                            head = assign;
+                        }
+                        else
+                        {
+                            tail->next = assign;
+                        }
+                        tail = assign;
+                        first = 0;
+                    }
+                    lexer_next(l);
+                }
                 node->struct_init.fields = head;
 
                 GenericTemplate *gtpl = ctx->templates;
@@ -4084,9 +4152,40 @@ ASTNode *parse_primary(ParserContext *ctx, Lexer *l)
                 ASTNode *idx_node = ast_create(NODE_EXPR_INDEX);
                 idx_node->index.array = node;
                 idx_node->index.index = index;
-                idx_node->type_info = (node->type_info && node->type_info->inner)
-                                          ? node->type_info->inner
-                                          : type_new(TYPE_INT);
+
+                // Resolve array type_info from symbol table if needed
+                Type *arr_type = node->type_info;
+                if (!arr_type && node->type == NODE_EXPR_VAR)
+                {
+                    arr_type = find_symbol_type_info(ctx, node->var_ref.name);
+                }
+
+                if (arr_type && arr_type->inner)
+                {
+                    idx_node->type_info = arr_type->inner;
+                }
+                else if (arr_type && arr_type->name &&
+                         (arr_type->kind == TYPE_VECTOR || arr_type->kind == TYPE_STRUCT ||
+                          arr_type->kind == TYPE_ARRAY))
+                {
+                    // Look up struct def to check if it's a vector type
+                    ASTNode *def = find_struct_def(ctx, arr_type->name);
+                    if (def && def->type == NODE_STRUCT && def->type_info &&
+                        def->type_info->kind == TYPE_VECTOR && def->strct.fields &&
+                        def->strct.fields->type_info)
+                    {
+                        arr_type->inner = def->strct.fields->type_info;
+                        idx_node->type_info = def->strct.fields->type_info;
+                    }
+                    else
+                    {
+                        idx_node->type_info = type_new(TYPE_INT);
+                    }
+                }
+                else
+                {
+                    idx_node->type_info = type_new(TYPE_INT);
+                }
                 node = idx_node;
             }
         }

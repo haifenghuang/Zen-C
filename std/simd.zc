@@ -1,0 +1,36 @@
+/**
+ * @file simd.zc
+ * @brief Native SIMD vector types and operations.
+ */
+
+@vector(4)
+struct f32x4 {
+    v: f32;
+}
+
+@vector(4)
+struct i32x4 {
+    v: i32;
+}
+
+@vector(8)
+struct f32x8 {
+    v: f32;
+}
+
+@vector(8)
+struct i32x8 {
+    v: i32;
+}
+
+@vector(16)
+struct i8x16 {
+    v: i8;
+}
+
+@vector(16)
+struct u8x16 {
+    v: u8;
+}
+
+// ... more types can be added here ...

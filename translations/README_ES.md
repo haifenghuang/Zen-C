@@ -343,6 +343,20 @@ union Data {
 }
 ```
 
+#### Vectores SIMD
+Tipos de vectores SIMD nativos utilizando extensiones de vectores de GCC/Clang. Anota un struct con `@vector(N)` para definir un vector de N elementos.
+```zc
+import "std/simd.zc";
+
+fn main() {
+    let a = f32x4{v: 1.0};              // Difusión: {1.0, 1.0, 1.0, 1.0}
+    let b = f32x4{1.0, 2.0, 3.0, 4.0};  // Inicialización por elemento
+    let c = a + b;                       // Suma por elementos
+    let x = c[0];                        // Acceso a elementos (float)
+}
+```
+Los operadores aritméticos (`+`, `-`, `*`, `/`) y bit a bit (`&`, `|`, `^`) funcionan por elementos. Consulta [`std/simd.zc`](../std/simd.zc) para los tipos predefinidos.
+
 #### Alias de Tipos
 Crea un nuevo nombre para un tipo existente.
 ```zc
@@ -1365,6 +1379,7 @@ Zen C incluye una biblioteca estándar (`std`) que cubre las funcionalidades ese
 | **`std/set.zc`** | Conjunto Hash Genérico `Set<T>`. | [Docs](../docs/std/set.md) |
 | **`std/process.zc`** | Ejecución y gestión de procesos. | [Docs](../docs/std/process.md) |
 | **`std/regex.zc`** | Expresiones Regulares (basado en TRE). | [Docs](../docs/std/regex.md) |
+| **`std/simd.zc`** | Tipos de vectores SIMD nativos. | [Docs](../docs/std/simd.md) |
 
 </details>
 

@@ -56,6 +56,7 @@ void emit_preamble(ParserContext *ctx, FILE *out)
               out);
         fputs("#include <stdarg.h>\n#include <stdint.h>\n#include <stdbool.h>\n", out);
         fputs("#include <unistd.h>\n#include <fcntl.h>\n", out); // POSIX functions
+        fputs("#define ZC_SIMD(T, N) T __attribute__((vector_size(N * sizeof(T))))\n", out);
 
         // C++ compatibility
         if (g_config.use_cpp)
@@ -438,6 +439,21 @@ void emit_struct_defs(ParserContext *ctx, ASTNode *node, FILE *out)
             {
                 fprintf(out, "#if %s\n", node->cfg_condition);
             }
+
+            if (node->type_info && node->type_info->kind == TYPE_VECTOR)
+            {
+                char *inner_c = codegen_type_to_string(node->type_info->inner);
+                fprintf(out, "typedef ZC_SIMD(%s, %d) %s;\n", inner_c, node->type_info->array_size,
+                        node->strct.name);
+                free(inner_c);
+                if (node->cfg_condition)
+                {
+                    fprintf(out, "#endif\n");
+                }
+                node = node->next;
+                continue;
+            }
+
             if (node->strct.is_union)
             {
                 fprintf(out, "union %s {", node->strct.name);
@@ -1257,8 +1273,16 @@ void print_type_defs(ParserContext *ctx, FILE *out, ASTNode *nodes)
     {
         if (local->type == NODE_STRUCT && !local->strct.is_template)
         {
-            const char *keyword = local->strct.is_union ? "union" : "struct";
-            fprintf(out, "typedef %s %s %s;\n", keyword, local->strct.name, local->strct.name);
+            if (local->type_info && local->type_info->kind == TYPE_VECTOR)
+            {
+                // For vectors, we emit a custom typedef in emit_struct_defs.
+                // Standard 'typedef struct Name Name' would conflict.
+            }
+            else
+            {
+                const char *keyword = local->strct.is_union ? "union" : "struct";
+                fprintf(out, "typedef %s %s %s;\n", keyword, local->strct.name, local->strct.name);
+            }
         }
         if (local->type == NODE_ENUM && !local->enm.is_template)
         {

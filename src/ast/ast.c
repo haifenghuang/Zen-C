@@ -86,6 +86,14 @@ Type *type_new_array(Type *inner, int size)
     return t;
 }
 
+Type *type_new_vector(Type *inner, int size)
+{
+    Type *t = type_new(TYPE_VECTOR);
+    t->inner = inner;
+    t->array_size = size;
+    return t;
+}
+
 int is_char_ptr(Type *t)
 {
     // Handle both primitive char* and legacy struct char*.
@@ -199,9 +207,13 @@ int type_eq(Type *a, Type *b)
         }
         return type_eq(a->inner, b);
     }
-    if (a->kind == TYPE_POINTER || a->kind == TYPE_ARRAY)
+    if (a->kind == TYPE_POINTER)
     {
         return type_eq(a->inner, b->inner);
+    }
+    if (a->kind == TYPE_ARRAY || a->kind == TYPE_VECTOR)
+    {
+        return a->array_size == b->array_size && type_eq(a->inner, b->inner);
     }
 
     return 1;
@@ -314,6 +326,19 @@ static char *type_to_string_impl(Type *t)
     {
         char *res = xmalloc(32);
         sprintf(res, "u%d", t->array_size);
+        return res;
+    }
+
+    case TYPE_VECTOR:
+    {
+        if (t->name)
+        {
+            return xstrdup(t->name);
+        }
+        char *inner = type_to_string(t->inner);
+        char *res = xmalloc(strlen(inner) + 20);
+        sprintf(res, "%sx%d", inner, t->array_size);
+        free(inner);
         return res;
     }
 
@@ -576,6 +601,19 @@ static char *type_to_c_string_impl(Type *t)
     {
         char *res = xmalloc(40);
         sprintf(res, "unsigned _BitInt(%d)", t->array_size);
+        return res;
+    }
+
+    case TYPE_VECTOR:
+    {
+        if (t->name)
+        {
+            return xstrdup(t->name);
+        }
+        char *inner = type_to_c_string(t->inner);
+        char *res = xmalloc(strlen(inner) + 32);
+        sprintf(res, "ZC_SIMD(%s, %d)", inner, t->array_size);
+        free(inner);
         return res;
     }
 

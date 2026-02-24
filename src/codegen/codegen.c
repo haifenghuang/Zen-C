@@ -950,6 +950,12 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
             }
         }
 
+        if (node->member.target->type_info && node->member.target->type_info->kind == TYPE_VECTOR)
+        {
+            codegen_expression(ctx, node->member.target, out);
+            return;
+        }
+
         if (node->member.is_pointer_access == 2)
         {
             fprintf(out, "({ ");
@@ -1095,7 +1101,8 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
             {
                 int fixed_size = -1;
                 if (node->index.array->type_info &&
-                    node->index.array->type_info->kind == TYPE_ARRAY)
+                    (node->index.array->type_info->kind == TYPE_ARRAY ||
+                     node->index.array->type_info->kind == TYPE_VECTOR))
                 {
                     fixed_size = node->index.array->type_info->array_size;
                 }
@@ -1637,6 +1644,7 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
         int is_zen_struct = 0;
         int is_union = 0;
         StructRef *sr = ctx->parsed_structs_list;
+        int is_vector = 0;
         while (sr)
         {
             if (sr->node && sr->node->type == NODE_STRUCT &&
@@ -1647,12 +1655,20 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
                 {
                     is_union = 1;
                 }
+                if (sr->node->type_info && sr->node->type_info->kind == TYPE_VECTOR)
+                {
+                    is_vector = 1;
+                }
                 break;
             }
             sr = sr->next;
         }
 
-        if (is_zen_struct)
+        if (is_vector)
+        {
+            fprintf(out, "(%s){", struct_name);
+        }
+        else if (is_zen_struct)
         {
             if (is_union)
             {
@@ -1667,6 +1683,65 @@ void codegen_expression(ParserContext *ctx, ASTNode *node, FILE *out)
         {
             fprintf(out, "(%s){", struct_name);
         }
+
+        // Handle SIMD vector initialization (broadcast or per-element)
+        StructRef *sr_vec = ctx->parsed_structs_list;
+        while (sr_vec)
+        {
+            if (sr_vec->node && sr_vec->node->type == NODE_STRUCT &&
+                strcmp(sr_vec->node->strct.name, struct_name) == 0)
+            {
+                if (sr_vec->node->type_info->kind == TYPE_VECTOR)
+                {
+                    ASTNode *f_vec = node->struct_init.fields;
+                    if (f_vec)
+                    {
+                        // Count fields to determine broadcast vs per-element
+                        int field_count = 0;
+                        ASTNode *tmp = f_vec;
+                        while (tmp)
+                        {
+                            field_count++;
+                            tmp = tmp->next;
+                        }
+
+                        if (field_count > 1)
+                        {
+                            // Per-element init: f32x4{1.0, 2.0, 3.0, 4.0}
+                            ASTNode *elem = f_vec;
+                            int i = 0;
+                            while (elem)
+                            {
+                                if (i > 0)
+                                {
+                                    fprintf(out, ", ");
+                                }
+                                codegen_expression(ctx, elem->var_decl.init_expr, out);
+                                elem = elem->next;
+                                i++;
+                            }
+                        }
+                        else
+                        {
+                            // Broadcast init: f32x4{v: 1.0}
+                            for (int i = 0; i < sr_vec->node->type_info->array_size; i++)
+                            {
+                                if (i > 0)
+                                {
+                                    fprintf(out, ", ");
+                                }
+                                codegen_expression(ctx, f_vec->var_decl.init_expr, out);
+                            }
+                        }
+                    }
+                    fprintf(out, "}");
+                    return;
+                }
+                break;
+            }
+            sr_vec = sr_vec->next;
+        }
+
         ASTNode *f = node->struct_init.fields;
         while (f)
         {

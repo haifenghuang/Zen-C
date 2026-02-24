@@ -380,6 +380,11 @@ int validate_types(ParserContext *ctx);
  */
 void propagate_drop_traits(ParserContext *ctx);
 
+/**
+ * @brief Propagates inner types for vector types (SIMD).
+ */
+void propagate_vector_inner_types(ParserContext *ctx);
+
 // Token helpers
 
 /**

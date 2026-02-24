@@ -464,6 +464,7 @@ int main(int argc, char **argv)
         }
     }
 
+    propagate_vector_inner_types(&ctx);
     propagate_drop_traits(&ctx);
 
     if (!validate_types(&ctx))

@@ -16,6 +16,7 @@
 - [Process](./process.md) - Process execution and management.
 - [Result](./result.md) - Error handling (Ok/Err).
 - [Regex](./regex.md) - Regular expressions.
+- [SIMD](./simd.md) - Native SIMD vector types and operations.
 - [Queue](./queue.md) - FIFO queue (Ring Buffer).
 - [Set](./set.md) - Hash set implementation.
 - [Slice](./slice.md) - Array slicing.

@@ -4362,6 +4362,24 @@ int validate_types(ParserContext *ctx)
     return errors == 0;
 }
 
+void propagate_vector_inner_types(ParserContext *ctx)
+{
+    StructRef *ref = ctx->parsed_structs_list;
+    while (ref)
+    {
+        ASTNode *strct = ref->node;
+        if (strct && strct->type == NODE_STRUCT && strct->type_info &&
+            strct->type_info->kind == TYPE_VECTOR && !strct->type_info->inner)
+        {
+            if (strct->strct.fields && strct->strct.fields->type_info)
+            {
+                strct->type_info->inner = strct->strct.fields->type_info;
+            }
+        }
+        ref = ref->next;
+    }
+}
+
 void propagate_drop_traits(ParserContext *ctx)
 {
     int changed = 1;

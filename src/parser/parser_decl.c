@@ -209,6 +209,7 @@ ASTNode *parse_function(ParserContext *ctx, Lexer *l, int is_async)
     node->func.default_values = default_values;
     node->func.ret_type_info = ret_type_obj;
     node->func.is_varargs = is_varargs;
+    node->func.is_async = is_async;
     node->func.c_type_overrides = ctype_overrides;
 
     if (gen_param)
